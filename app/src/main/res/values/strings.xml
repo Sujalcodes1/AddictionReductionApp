@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">AddictionReductionApp</string>
+    <string name="accessibility_description">Monitors app usage to help reduce addiction by blocking apps when daily limits are reached.</string>
+</resources>
