@@ -65,16 +65,16 @@ object AppDataStore {
     var isFocusModeActive = mutableStateOf(false)
 
     val achievements = mutableStateListOf(
-        Achievement("first_focus", "First Focus", "Complete your first focus session", "🎯"),
-        Achievement("streak_3", "On Fire!", "Maintain a 3-day streak", "🔥"),
-        Achievement("streak_7", "Week Warrior", "Maintain a 7-day streak", "⚡"),
-        Achievement("streak_30", "Monthly Master", "Maintain a 30-day streak", "👑"),
-        Achievement("focus_60", "Hour Hero", "Complete 60 minutes of focus in one day", "⏰"),
-        Achievement("focus_300", "Deep Diver", "Complete 300 total minutes of focus", "🌊"),
-        Achievement("block_5", "App Tamer", "Block 5 apps simultaneously", "🛡️"),
-        Achievement("sessions_10", "Consistent", "Complete 10 focus sessions", "💪"),
-        Achievement("sessions_50", "Dedicated", "Complete 50 focus sessions", "🏆"),
-        Achievement("no_phone", "Zen Mode", "Stay off blocked apps for a full day", "🧘")
+        Achievement("first_focus", "First Focus", "Complete your first focus session", "Target"),
+        Achievement("streak_3", "On Fire!", "Maintain a 3-day streak", "Streak"),
+        Achievement("streak_7", "Week Warrior", "Maintain a 7-day streak", "Lightning"),
+        Achievement("streak_30", "Monthly Master", "Maintain a 30-day streak", "Crown"),
+        Achievement("focus_60", "Hour Hero", "Complete 60 minutes of focus in one day", "Clock"),
+        Achievement("focus_300", "Deep Diver", "Complete 300 total minutes of focus", "Ocean"),
+        Achievement("block_5", "App Tamer", "Block 5 apps simultaneously", "Shield"),
+        Achievement("sessions_10", "Consistent", "Complete 10 focus sessions", "Strong"),
+        Achievement("sessions_50", "Dedicated", "Complete 50 focus sessions", "Trophy"),
+        Achievement("no_phone", "Zen Mode", "Stay off blocked apps for a full day", "Zen")
     )
 
     fun saveToPrefs(context: Context) {

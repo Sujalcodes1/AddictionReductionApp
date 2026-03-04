@@ -95,24 +95,28 @@ fun ProfileScreen(onNavigateToApps: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     ProfileStat(
+                        icon = Icons.Default.LocalFireDepartment,
                         value = "${AppDataStore.streakCount.intValue}",
                         label = "STREAK",
-                        emoji = "🔥"
+                        tint = RegainOrange
                     )
                     ProfileStat(
+                        icon = Icons.Default.Timer,
                         value = "${AppDataStore.totalFocusMinutes.intValue}m",
                         label = "FOCUS",
-                        emoji = "⏱️"
+                        tint = RegainTeal
                     )
                     ProfileStat(
+                        icon = Icons.Default.CheckCircle,
                         value = "${AppDataStore.sessionsCompleted.intValue}",
                         label = "SESSIONS",
-                        emoji = "✅"
+                        tint = SuccessGreen
                     )
                     ProfileStat(
+                        icon = Icons.Default.EmojiEvents,
                         value = "${AppDataStore.longestStreak.intValue}",
                         label = "BEST",
-                        emoji = "🏆"
+                        tint = RegainAmber
                     )
                 }
             }
@@ -260,9 +264,14 @@ fun ProfileScreen(onNavigateToApps: () -> Unit) {
 }
 
 @Composable
-private fun ProfileStat(value: String, label: String, emoji: String) {
+private fun ProfileStat(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    label: String,
+    tint: androidx.compose.ui.graphics.Color
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(emoji, fontSize = 20.sp)
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         Spacer(Modifier.height(4.dp))
         Text(
             value,

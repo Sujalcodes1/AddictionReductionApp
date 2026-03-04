@@ -51,11 +51,11 @@ fun FocusTimerScreen() {
 
     val durations = listOf(15, 25, 45, 60, 90, 120)
     val sounds = listOf(
-        AmbientSound("Rain", "🌧️"),
-        AmbientSound("Forest", "🌲"),
-        AmbientSound("Café", "☕"),
-        AmbientSound("Lo-fi", "🎵"),
-        AmbientSound("Silence", "🔇")
+        AmbientSound("Rain", "Rain"),
+        AmbientSound("Forest", "Forest"),
+        AmbientSound("Cafe", "Cafe"),
+        AmbientSound("Lo-fi", "Lo-fi"),
+        AmbientSound("Silence", "Silence")
     )
 
     // Timer logic
@@ -275,12 +275,10 @@ fun FocusTimerScreen() {
                             Modifier.padding(vertical = 10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(sound.emoji, fontSize = 20.sp)
-                            Spacer(Modifier.height(4.dp))
                             Text(
-                                sound.name,
+                                sound.emoji,
                                 color = if (isSelected) RegainTeal else TextGray,
-                                fontSize = 9.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -410,7 +408,12 @@ fun SessionCompleteScreen(duration: Int, onDismiss: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(32.dp)
         ) {
-            Text("🎉", fontSize = 72.sp)
+            Icon(
+                Icons.Default.EmojiEvents,
+                contentDescription = null,
+                tint = RegainTeal,
+                modifier = Modifier.size(64.dp)
+            )
             Spacer(Modifier.height(24.dp))
             Text(
                 "Session Complete!",
@@ -437,7 +440,12 @@ fun SessionCompleteScreen(duration: Int, onDismiss: () -> Unit) {
                         Modifier.padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("⏱️", fontSize = 24.sp)
+                        Icon(
+                            Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = RegainTeal,
+                            modifier = Modifier.size(28.dp)
+                        )
                         Spacer(Modifier.height(4.dp))
                         Text("$duration min", color = TextWhite, fontWeight = FontWeight.Bold)
                         Text("Duration", color = TextGray, fontSize = 11.sp)
@@ -451,7 +459,12 @@ fun SessionCompleteScreen(duration: Int, onDismiss: () -> Unit) {
                         Modifier.padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("🔥", fontSize = 24.sp)
+                        Icon(
+                            Icons.Default.LocalFireDepartment,
+                            contentDescription = null,
+                            tint = RegainOrange,
+                            modifier = Modifier.size(28.dp)
+                        )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "${AppDataStore.streakCount.intValue}",
@@ -469,7 +482,12 @@ fun SessionCompleteScreen(duration: Int, onDismiss: () -> Unit) {
                         Modifier.padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("✅", fontSize = 24.sp)
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = SuccessGreen,
+                            modifier = Modifier.size(28.dp)
+                        )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "${AppDataStore.sessionsCompleted.intValue}",

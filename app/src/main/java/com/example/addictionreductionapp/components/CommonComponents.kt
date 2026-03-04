@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -272,6 +272,21 @@ fun AchievementBadge(
     progress: Float,
     modifier: Modifier = Modifier
 ) {
+    val icon = when (emoji) {
+        "Target"    -> Icons.Default.TrackChanges
+        "Streak"    -> Icons.Default.LocalFireDepartment
+        "Lightning" -> Icons.Default.ElectricBolt
+        "Crown"     -> Icons.Default.EmojiEvents
+        "Clock"     -> Icons.Default.Timer
+        "Ocean"     -> Icons.Default.Pool
+        "Shield"    -> Icons.Default.Shield
+        "Strong"    -> Icons.Default.FitnessCenter
+        "Trophy"    -> Icons.Default.MilitaryTech
+        "Zen"       -> Icons.Default.SelfImprovement
+        else        -> Icons.Default.Star
+    }
+    val iconTint = if (isUnlocked) RegainTeal else TextGray.copy(alpha = 0.4f)
+
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
@@ -285,10 +300,13 @@ fun AchievementBadge(
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                emoji,
-                fontSize = 32.sp,
-                modifier = Modifier.padding(bottom = 4.dp)
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier
+                    .size(32.dp)
+                    .padding(bottom = 4.dp)
             )
             Text(
                 title,
@@ -316,9 +334,9 @@ fun AchievementBadge(
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
-                        "✓",
+                        "Done",
                         color = RegainTeal,
-                        fontSize = 12.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
                     )
