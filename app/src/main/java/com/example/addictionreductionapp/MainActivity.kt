@@ -33,6 +33,12 @@ import androidx.navigation.compose.rememberNavController
 import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.screens.*
 import com.example.addictionreductionapp.ui.theme.*
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     private var isBlockTriggered = mutableStateOf(false)
@@ -41,6 +47,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        scheduleNotifications()
         AppDataStore.loadFromPrefs(this)
         isBlockTriggered.value = intent?.getBooleanExtra("show_block_screen", false) ?: false
         blockedAppName.value = intent?.getStringExtra("blocked_app_name") ?: ""
@@ -78,6 +85,56 @@ class MainActivity : ComponentActivity() {
             blockedAppName.value = intent.getStringExtra("blocked_app_name") ?: ""
             blockReason.value = intent.getStringExtra("block_reason") ?: ""
         }
+    }
+
+    private fun scheduleNotifications() {
+        NotificationHelper.createChannels(this)
+        val workManager = WorkManager.getInstance(this)
+
+        val now = Calendar.getInstance()
+        
+        // Daily Report: 24h, 9 PM
+        val dailyTarget = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 21)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+        }
+        if (now.after(dailyTarget)) {
+            dailyTarget.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        val dailyDelay = dailyTarget.timeInMillis - now.timeInMillis
+        val dailyRequest = PeriodicWorkRequestBuilder<ReportWorker>(24, TimeUnit.HOURS)
+            .setInitialDelay(dailyDelay, TimeUnit.MILLISECONDS)
+            .setInputData(workDataOf("report_type" to "daily"))
+            .build()
+        workManager.enqueueUniquePeriodicWork("daily_report", ExistingPeriodicWorkPolicy.KEEP, dailyRequest)
+
+        // Weekly Report: 7 days, 9 AM
+        val weeklyTarget = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 9)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+        }
+        if (now.after(weeklyTarget)) {
+            weeklyTarget.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        val weeklyDelay = weeklyTarget.timeInMillis - now.timeInMillis
+        val weeklyRequest = PeriodicWorkRequestBuilder<ReportWorker>(7, TimeUnit.DAYS)
+            .setInitialDelay(weeklyDelay, TimeUnit.MILLISECONDS)
+            .setInputData(workDataOf("report_type" to "weekly"))
+            .build()
+        workManager.enqueueUniquePeriodicWork("weekly_report", ExistingPeriodicWorkPolicy.KEEP, weeklyRequest)
+
+        // Monthly Report: 30 days
+        val monthlyRequest = PeriodicWorkRequestBuilder<ReportWorker>(30, TimeUnit.DAYS)
+            .setInputData(workDataOf("report_type" to "monthly"))
+            .build()
+        workManager.enqueueUniquePeriodicWork("monthly_report", ExistingPeriodicWorkPolicy.KEEP, monthlyRequest)
+
+        // Hourly Nudge: 1 hour
+        val nudgeRequest = PeriodicWorkRequestBuilder<NudgeWorker>(1, TimeUnit.HOURS)
+            .build()
+        workManager.enqueueUniquePeriodicWork("hourly_nudge", ExistingPeriodicWorkPolicy.KEEP, nudgeRequest)
     }
 }
 

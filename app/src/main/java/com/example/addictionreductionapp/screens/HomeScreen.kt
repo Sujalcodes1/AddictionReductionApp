@@ -85,11 +85,11 @@ fun HomeScreen(
     }
 
     val motivationalMessages = listOf(
-        "Great job staying focused! Keep it up! 🎯",
-        "You're building strong habits. I'm proud of you! 💪",
-        "Every minute of focus counts. You're doing amazing! ⭐",
-        "Stay disciplined, greatness is built daily! 🔥",
-        "Your future self will thank you for today's focus! 🚀"
+        "Great job staying focused! Keep it up!",
+        "You're building strong habits. Keep going!",
+        "Every minute of focus counts. You're doing amazing!",
+        "Stay disciplined, greatness is built daily!",
+        "Your future self will thank you for today's focus!"
     )
     val buddyMessage = remember {
         motivationalMessages[Calendar.getInstance().get(Calendar.HOUR_OF_DAY) % motivationalMessages.size]
@@ -369,7 +369,7 @@ fun HomeScreen(
                 icon = Icons.Default.LocalFireDepartment,
                 value = "${AppDataStore.streakCount.intValue}",
                 label = "Day Streak",
-                trend = if (AppDataStore.streakCount.intValue > 0) "🔥" else "",
+                trend = if (AppDataStore.streakCount.intValue > 0) "+${AppDataStore.streakCount.intValue}" else "",
                 accentColor = RegainOrange
             )
         }
@@ -412,7 +412,12 @@ fun HomeScreen(
                     modifier = Modifier.size(48.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text("🏹", fontSize = 24.sp)
+                        Icon(
+                            Icons.Default.Psychology,
+                            contentDescription = null,
+                            tint = RegainTeal,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
                 }
                 Spacer(Modifier.width(12.dp))
