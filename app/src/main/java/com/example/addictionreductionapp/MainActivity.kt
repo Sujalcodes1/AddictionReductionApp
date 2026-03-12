@@ -3,40 +3,95 @@ package com.example.addictionreductionapp
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.compose.setContent
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.addictionreductionapp.data.AppDataStore
-import com.example.addictionreductionapp.screens.*
-import com.example.addictionreductionapp.ui.theme.*
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import com.example.addictionreductionapp.data.AppDataStore
+import com.example.addictionreductionapp.screens.AICoachScreen
+import com.example.addictionreductionapp.screens.AnalyticsScreen
+import com.example.addictionreductionapp.screens.AppBlockerScreen
+import com.example.addictionreductionapp.screens.FocusTimerScreen
+import com.example.addictionreductionapp.screens.TimerScreen
+import com.example.addictionreductionapp.screens.HomeScreen
+import com.example.addictionreductionapp.screens.OnboardingScreen
+import com.example.addictionreductionapp.screens.ProfileScreen
+import com.example.addictionreductionapp.ui.theme.DarkBackground
+import com.example.addictionreductionapp.ui.theme.ErrorRed
+import com.example.addictionreductionapp.ui.theme.RegainOrange
+import com.example.addictionreductionapp.ui.theme.RegainTeal
+import com.example.addictionreductionapp.ui.theme.RegainTheme
+import com.example.addictionreductionapp.ui.theme.TextGray
+import com.example.addictionreductionapp.ui.theme.TextWhite
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
@@ -147,7 +202,7 @@ fun AppRoot(
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val currentRoute = remember(navBackStackEntry) { navBackStackEntry?.destination?.route }
 
     val showOnboarding = !AppDataStore.hasCompletedOnboarding.value
 
@@ -166,12 +221,21 @@ fun AppRoot(
         }
     }
 
-    val screensWithNav = setOf("home", "timer", "analytics", "coach", "profile")
+    val screensWithNav = remember { setOf("home", "timer", "analytics", "coach", "settings") }
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         bottomBar = {
             if (currentRoute in screensWithNav) {
-                RegainBottomNavBar(navController)
+                Column {
+                    BottomNavigationBar(navController)
+                    Spacer(
+                        Modifier
+                            .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                            .fillMaxWidth()
+                            .background(Color(0xFF0F171E))
+                    )
+                }
             }
         },
         containerColor = DarkBackground
@@ -179,7 +243,9 @@ fun AppRoot(
         Box(Modifier.padding(padding)) {
             NavHost(
                 navController = navController,
-                startDestination = if (showOnboarding) "onboarding" else "home"
+                startDestination = if (showOnboarding) "onboarding" else "home",
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None }
             ) {
                 composable("onboarding") {
                     OnboardingScreen(
@@ -199,7 +265,7 @@ fun AppRoot(
                 }
 
                 composable("timer") {
-                    FocusTimerScreen()
+                    TimerScreen()
                 }
 
                 composable("analytics") {
@@ -211,6 +277,12 @@ fun AppRoot(
                 }
 
                 composable("profile") {
+                    ProfileScreen(
+                        onNavigateToApps = { navController.navigate("app_blocker") }
+                    )
+                }
+
+                composable("settings") {
                     ProfileScreen(
                         onNavigateToApps = { navController.navigate("app_blocker") }
                     )
@@ -332,84 +404,98 @@ fun BlockScreen(
     }
 }
 
-data class NavItem(
-    val label: String,
-    val route: String,
-    val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector
-)
-
 @Composable
-fun RegainBottomNavBar(navController: NavHostController) {
+fun BottomNavigationBar(navController: NavHostController) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-
-    val items = listOf(
-        NavItem("Home", "home", Icons.Filled.Home, Icons.Outlined.Home),
-        NavItem("Timer", "timer", Icons.Filled.Timer, Icons.Outlined.Timer),
-        NavItem("Stats", "analytics", Icons.Filled.BarChart, Icons.Outlined.BarChart),
-        NavItem("Coach", "coach", Icons.Filled.Psychology, Icons.Outlined.Psychology),
-        NavItem("Profile", "profile", Icons.Filled.Person, Icons.Outlined.Person)
-    )
-
-    NavigationBar(
-        containerColor = DarkNavBar,
-        tonalElevation = 0.dp,
-        modifier = Modifier.height(72.dp)
+    val currentRoute = remember(navBackStackEntry) {
+        navBackStackEntry?.destination?.route
+    }
+    val items = remember {
+        listOf(
+            Triple("home",      "Home",     Icons.Default.Home),
+            Triple("timer",     "Timer",    Icons.Default.Timer),
+            Triple("analytics", "Stats",    Icons.Default.BarChart),
+            Triple("coach",     "Coach",    Icons.Default.Psychology),
+            Triple("settings",  "Settings", Icons.Default.Settings)
+        )
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF0F171E))
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        items.forEach { item ->
-            val isSelected = currentRoute == item.route
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = {
-                    if (currentRoute != item.route) {
-                        navController.navigate(item.route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                },
-                icon = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (isSelected) {
-                            Box(
-                                Modifier
-                                    .size(32.dp)
-                                    .background(RegainTeal.copy(alpha = 0.15f), CircleShape),
-                                contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEach { (route, label, icon) ->
+                key(route) {
+                    val isSelected = currentRoute == route
+                    val chipWidth by animateDpAsState(
+                        targetValue = if (isSelected) 100.dp else 44.dp,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = route
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(chipWidth)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(
+                                if (isSelected) Color(0xFF00BFA5).copy(alpha = 0.15f)
+                                else Color.Transparent
+                            )
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
                             ) {
-                                Icon(
-                                    item.selectedIcon,
-                                    contentDescription = null,
-                                    tint = RegainTeal,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        } else {
+                                if (currentRoute != route) {
+                                    navController.navigate(route) {
+                                        popUpTo(navController.graph.startDestinationId) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
                             Icon(
-                                item.unselectedIcon,
-                                contentDescription = null,
-                                tint = TextGray,
+                                imageVector = icon,
+                                contentDescription = label,
+                                tint = if (isSelected) Color(0xFF00BFA5) else Color.Gray,
                                 modifier = Modifier.size(20.dp)
                             )
+                            AnimatedVisibility(
+                                visible = isSelected,
+                                enter = fadeIn(tween(200)) + expandHorizontally(tween(250)),
+                                exit = fadeOut(tween(150)) + shrinkHorizontally(tween(200))
+                            ) {
+                                Row {
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(
+                                        text = label,
+                                        color = Color(0xFF00BFA5),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
                         }
                     }
-                },
-                label = {
-                    Text(
-                        item.label,
-                        fontSize = 10.sp,
-                        color = if (isSelected) RegainTeal else TextGray,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                    )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = Color.Transparent
-                )
-            )
+                }
+            }
         }
     }
 }

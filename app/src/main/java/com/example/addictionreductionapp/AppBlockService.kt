@@ -54,7 +54,7 @@ class AppBlockService : AccessibilityService() {
     private val checkRunnable = object : Runnable {
         override fun run() {
             checkCurrentAppUsage()
-            handler.postDelayed(this, 1000)
+            handler.postDelayed(this, 2000)
         }
     }
 
