@@ -29,7 +29,9 @@ import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.data.DailyUsage
 import com.example.addictionreductionapp.data.RealTimeUsage
 import com.example.addictionreductionapp.ui.theme.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -40,6 +42,7 @@ fun AnalyticsScreen() {
     var usageList by remember { mutableStateOf(listOf<RealTimeUsage>()) }
     var dailyHistory by remember { mutableStateOf(listOf<DailyUsage>()) }
     var totalScreenTime by remember { mutableLongStateOf(0L) }
+    var isLoading by remember { mutableStateOf(true) }
 
     val usageStatsManager = remember {
         context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
@@ -61,41 +64,45 @@ fun AnalyticsScreen() {
                 else -> calendar.timeInMillis
             }
 
-            val stats = usageStatsManager.queryAndAggregateUsageStats(startTime, now)
-            usageList = AppDataStore.apps.map { app ->
-                RealTimeUsage(
-                    app.name,
-                    app.packageName,
-                    stats[app.packageName]?.totalTimeInForeground ?: 0L,
-                    app.limitMinutes
-                )
-            }
-            totalScreenTime = usageList.sumOf { it.timeSpentMillis }
-
-            if (selectedPeriod > 0) {
-                val dailyStats = usageStatsManager.queryUsageStats(
-                    UsageStatsManager.INTERVAL_DAILY, startTime, now
-                )
-                dailyHistory = dailyStats.groupBy {
-                    val cal = Calendar.getInstance().apply { timeInMillis = it.firstTimeStamp }
-                    cal.get(Calendar.DAY_OF_YEAR)
-                }.map { (dayOfYear, statsInDay) ->
-                    val cal = Calendar.getInstance().apply { set(Calendar.DAY_OF_YEAR, dayOfYear) }
-                    val dayLabel = when (cal.get(Calendar.DAY_OF_WEEK)) {
-                        Calendar.MONDAY -> "Mon"
-                        Calendar.TUESDAY -> "Tue"
-                        Calendar.WEDNESDAY -> "Wed"
-                        Calendar.THURSDAY -> "Thu"
-                        Calendar.FRIDAY -> "Fri"
-                        Calendar.SATURDAY -> "Sat"
-                        else -> "Sun"
-                    }
-                    DailyUsage(dayLabel, statsInDay.sumOf { it.totalTimeInForeground })
+            val (newUsageList, newDailyHistory) = withContext(Dispatchers.IO) {
+                val stats = usageStatsManager.queryAndAggregateUsageStats(startTime, now)
+                val apps = AppDataStore.apps.map { app ->
+                    RealTimeUsage(
+                        app.name,
+                        app.packageName,
+                        stats[app.packageName]?.totalTimeInForeground ?: 0L,
+                        app.limitMinutes
+                    )
                 }
-            } else {
-                dailyHistory = listOf()
+                val daily = if (selectedPeriod > 0) {
+                    val dailyStats = usageStatsManager.queryUsageStats(
+                        UsageStatsManager.INTERVAL_DAILY, startTime, now
+                    )
+                    dailyStats.groupBy {
+                        val cal = Calendar.getInstance().apply { timeInMillis = it.firstTimeStamp }
+                        cal.get(Calendar.DAY_OF_YEAR)
+                    }.map { (dayOfYear, statsInDay) ->
+                        val cal = Calendar.getInstance().apply { set(Calendar.DAY_OF_YEAR, dayOfYear) }
+                        val dayLabel = when (cal.get(Calendar.DAY_OF_WEEK)) {
+                            Calendar.MONDAY -> "Mon"
+                            Calendar.TUESDAY -> "Tue"
+                            Calendar.WEDNESDAY -> "Wed"
+                            Calendar.THURSDAY -> "Thu"
+                            Calendar.FRIDAY -> "Fri"
+                            Calendar.SATURDAY -> "Sat"
+                            else -> "Sun"
+                        }
+                        DailyUsage(dayLabel, statsInDay.sumOf { it.totalTimeInForeground })
+                    }
+                } else listOf()
+                Pair(apps, daily)
             }
-            delay(5000)
+
+            usageList = newUsageList
+            totalScreenTime = newUsageList.sumOf { it.timeSpentMillis }
+            dailyHistory = newDailyHistory
+            isLoading = false
+            delay(15000)
         }
     }
 

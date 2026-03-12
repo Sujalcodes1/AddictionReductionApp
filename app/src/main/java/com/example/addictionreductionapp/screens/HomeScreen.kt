@@ -68,7 +68,7 @@ fun HomeScreen(
             }
             totalUsedMillis = total
             appsBlockedToday = blockedCount
-            delay(5000)
+            delay(15000)
         }
     }
 
