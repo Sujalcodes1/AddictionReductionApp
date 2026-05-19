@@ -63,7 +63,10 @@ object AppDataStore {
     var hasCompletedOnboarding = mutableStateOf(false)
     var longestStreak = mutableIntStateOf(0)
     var isFocusModeActive = mutableStateOf(false)
+<<<<<<< HEAD
     var isLoggedIn = mutableStateOf(false)
+=======
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
 
     val achievements = mutableStateListOf(
         Achievement("first_focus", "First Focus", "Complete your first focus session", "Target"),
@@ -96,7 +99,10 @@ object AppDataStore {
         editor.putBoolean("onboarding_done", hasCompletedOnboarding.value)
         editor.putInt("longest_streak", longestStreak.intValue)
         editor.putBoolean("focus_mode_active", isFocusModeActive.value)
+<<<<<<< HEAD
         editor.putBoolean("is_logged_in", isLoggedIn.value)
+=======
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
         editor.apply()
     }
 
@@ -120,7 +126,10 @@ object AppDataStore {
         hasCompletedOnboarding.value = prefs.getBoolean("onboarding_done", false)
         longestStreak.intValue = prefs.getInt("longest_streak", 0)
         isFocusModeActive.value = prefs.getBoolean("focus_mode_active", false)
+<<<<<<< HEAD
         isLoggedIn.value = prefs.getBoolean("is_logged_in", false)
+=======
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
         updateAchievements()
     }
 
