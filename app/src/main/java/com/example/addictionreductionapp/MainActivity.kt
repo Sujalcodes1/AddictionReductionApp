@@ -60,7 +60,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+<<<<<<< HEAD
 import androidx.compose.ui.platform.LocalContext
+=======
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -86,8 +89,11 @@ import com.example.addictionreductionapp.screens.TimerScreen
 import com.example.addictionreductionapp.screens.HomeScreen
 import com.example.addictionreductionapp.screens.OnboardingScreen
 import com.example.addictionreductionapp.screens.ProfileScreen
+<<<<<<< HEAD
 import com.example.addictionreductionapp.screens.LoginScreen
 import com.example.addictionreductionapp.screens.RegisterScreen
+=======
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
 import com.example.addictionreductionapp.ui.theme.DarkBackground
 import com.example.addictionreductionapp.ui.theme.ErrorRed
 import com.example.addictionreductionapp.ui.theme.RegainOrange
@@ -208,7 +214,10 @@ fun AppRoot(
     val currentRoute = remember(navBackStackEntry) { navBackStackEntry?.destination?.route }
 
     val showOnboarding = !AppDataStore.hasCompletedOnboarding.value
+<<<<<<< HEAD
     val isLoggedIn = AppDataStore.isLoggedIn.value
+=======
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
 
     // Store block info for the composable to use
     var currentBlockedApp by remember { mutableStateOf("") }
@@ -247,6 +256,7 @@ fun AppRoot(
         Box(Modifier.padding(padding)) {
             NavHost(
                 navController = navController,
+<<<<<<< HEAD
                 startDestination = if (!isLoggedIn) "login" else if (showOnboarding) "onboarding" else "home",
                 enterTransition = { EnterTransition.None },
                 exitTransition = { ExitTransition.None }
@@ -278,6 +288,12 @@ fun AppRoot(
                     )
                 }
 
+=======
+                startDestination = if (showOnboarding) "onboarding" else "home",
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None }
+            ) {
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
                 composable("onboarding") {
                     OnboardingScreen(
                         onComplete = {
@@ -308,6 +324,7 @@ fun AppRoot(
                 }
 
                 composable("profile") {
+<<<<<<< HEAD
                     val context = LocalContext.current
                     ProfileScreen(
                         onNavigateToApps = { navController.navigate("app_blocker") },
@@ -318,10 +335,15 @@ fun AppRoot(
                                 popUpTo(0) { inclusive = true }
                             }
                         }
+=======
+                    ProfileScreen(
+                        onNavigateToApps = { navController.navigate("app_blocker") }
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
                     )
                 }
 
                 composable("settings") {
+<<<<<<< HEAD
                     val context = LocalContext.current
                     ProfileScreen(
                         onNavigateToApps = { navController.navigate("app_blocker") },
@@ -332,6 +354,10 @@ fun AppRoot(
                                 popUpTo(0) { inclusive = true }
                             }
                         }
+=======
+                    ProfileScreen(
+                        onNavigateToApps = { navController.navigate("app_blocker") }
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
                     )
                 }
 

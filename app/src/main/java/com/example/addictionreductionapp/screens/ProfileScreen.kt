@@ -27,10 +27,14 @@ import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.*
 
 @Composable
+<<<<<<< HEAD
 fun ProfileScreen(
     onNavigateToApps: () -> Unit,
     onLogout: () -> Unit = {}
 ) {
+=======
+fun ProfileScreen(onNavigateToApps: () -> Unit) {
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showNameDialog by remember { mutableStateOf(false) }
@@ -219,6 +223,7 @@ fun ProfileScreen(
             onClick = { }
         )
 
+<<<<<<< HEAD
         SettingsItem(
             icon = Icons.Default.ExitToApp,
             title = "Logout",
@@ -226,6 +231,8 @@ fun ProfileScreen(
             onClick = onLogout
         )
 
+=======
+>>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
         Spacer(Modifier.height(24.dp))
     }
 
