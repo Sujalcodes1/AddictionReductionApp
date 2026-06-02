@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.shadow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.addictionreductionapp.TimerViewModel
 import com.example.addictionreductionapp.ui.theme.*
@@ -107,11 +108,24 @@ fun TimerScreen() {
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(58.dp),
+                    .height(58.dp)
+                    .shadow(
+                        elevation = 12.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        clip = false,
+                        ambientColor = Color(0xFF00BFA5).copy(alpha = 0.5f),
+                        spotColor = Color(0xFF00BFA5).copy(alpha = 0.5f)
+                    ),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF00BFA5)
                 ),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 0.dp,
+                    pressedElevation = 0.dp,
+                    focusedElevation = 0.dp,
+                    hoveredElevation = 0.dp
+                )
             ) {
                 Icon(
                     imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -135,11 +149,24 @@ fun TimerScreen() {
                 onClick = { timerViewModel.resetTimer() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
+                    .height(52.dp)
+                    .shadow(
+                        elevation = 6.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        clip = false,
+                        ambientColor = Color(0xFF00BFA5).copy(alpha = 0.5f),
+                        spotColor = Color(0xFF00BFA5).copy(alpha = 0.5f)
+                    ),
                 shape = RoundedCornerShape(16.dp),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     Color(0xFF00BFA5).copy(alpha = 0.4f)
+                ),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 0.dp,
+                    pressedElevation = 0.dp,
+                    focusedElevation = 0.dp,
+                    hoveredElevation = 0.dp
                 )
             ) {
                 Icon(

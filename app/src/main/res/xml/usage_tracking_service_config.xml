@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Accessibility service configuration for AppUsageTrackingService.
+
+    Key choices:
+    • accessibilityEventTypes="typeWindowStateChanged"
+        The only event type needed to detect foreground app switches.
+        Requesting nothing more avoids unnecessary IPC from events we
+        never use (typeViewClicked, typeViewScrolled, etc.).
+
+    • accessibilityFeedbackType="feedbackGeneric"
+        Marks this as a non-screen-reader service. Required to be present;
+        "feedbackGeneric" is the correct value for monitoring services that
+        do not give auditory/haptic feedback.
+
+    • accessibilityFlags="flagDefault"
+        No special flags needed. We do NOT request
+        flagReportViewIds or flagRequestFilterKeyEvents because we never
+        inspect view content — that would increase event volume for no benefit.
+
+    • canRetrieveWindowContent="false"
+        We never inspect view hierarchies — only the package name from the
+        event itself. Setting this to false reduces battery usage and avoids
+        the security surface of reading arbitrary screen content.
+
+    • notificationTimeout="100"
+        Minimum ms between consecutive events delivered to the service.
+        100 ms is the same value used by AppBlockService; it is the platform
+        minimum. Raising it would miss rapid app-switch events.
+
+    • description
+        Shown on the Accessibility Settings screen. Must explain clearly what
+        the service does to pass Play Store review.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/usage_tracking_accessibility_description"
+    android:notificationTimeout="100" />

@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.shadow
 import com.example.addictionreductionapp.data.AppDataStore
 import com.google.ai.client.generativeai.GenerativeModel
 import kotlinx.coroutines.launch
@@ -228,6 +229,13 @@ fun AICoachScreen() {
                 onClick = { sendMessage(userInput) },
                 modifier = Modifier
                     .size(48.dp)
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = CircleShape,
+                        clip = false,
+                        ambientColor = Color(0xFF00BFA5).copy(alpha = 0.5f),
+                        spotColor = Color(0xFF00BFA5).copy(alpha = 0.5f)
+                    )
                     .background(Color(0xFF00BFA5), CircleShape)
             ) {
                 Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.Black)

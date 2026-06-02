@@ -2,17 +2,30 @@ package com.example.addictionreductionapp
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
- * Stopwatch-style TimerViewModel.
- * elapsedSeconds counts UP from 0 while isRunning is true.
- * Survives page navigation because it lives in the ViewModel scope.
+ * Stopwatch-style ViewModel for the Focus Timer screen.
+ *
+ * [elapsedSeconds] counts UP from 0 while [isRunning] is true.
+ * Survives configuration changes because it lives in the ViewModel scope.
+ *
+ * Annotated with [@HiltViewModel] so Compose can obtain an instance via:
+ * ```kotlin
+ * val vm: TimerViewModel = hiltViewModel()
+ * ```
+ * No repository dependency is needed here — the pure timer state is ephemeral
+ * and intentionally not persisted to Room during an active session.
+ * Persisting is done by [com.example.addictionreductionapp.viewmodel.FocusSessionViewModel.recordSession]
+ * once the user stops or completes the timer.
  */
-class TimerViewModel : ViewModel() {
+@HiltViewModel
+class TimerViewModel @Inject constructor() : ViewModel() {
 
     val elapsedSeconds = MutableStateFlow(0L)
     val isRunning = MutableStateFlow(false)

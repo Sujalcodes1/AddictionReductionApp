@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.shadow
 import com.example.addictionreductionapp.components.AnimatedCircularProgress
 import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.*
@@ -204,9 +205,24 @@ fun FocusTimerScreen() {
                     if (!isLockMode) {
                         OutlinedButton(
                             onClick = { isTimerRunning = false; remainingSeconds = selectedDuration * 60 },
-                            modifier = Modifier.weight(1f).height(56.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp)
+                                .shadow(
+                                    elevation = 8.dp,
+                                    shape = RoundedCornerShape(16.dp),
+                                    clip = false,
+                                    ambientColor = ErrorRed.copy(alpha = 0.5f),
+                                    spotColor = ErrorRed.copy(alpha = 0.5f)
+                                ),
                             shape = RoundedCornerShape(16.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f)),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 0.dp,
+                                pressedElevation = 0.dp,
+                                focusedElevation = 0.dp,
+                                hoveredElevation = 0.dp
+                            )
                         ) {
                             Icon(Icons.Default.Stop, contentDescription = null, tint = ErrorRed)
                             Spacer(Modifier.width(8.dp))
@@ -215,9 +231,24 @@ fun FocusTimerScreen() {
                     }
                     Button(
                         onClick = { isTimerRunning = false },
-                        modifier = Modifier.weight(1f).height(56.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp)
+                            .shadow(
+                                elevation = 12.dp,
+                                shape = RoundedCornerShape(16.dp),
+                                clip = false,
+                                ambientColor = RegainTeal.copy(alpha = 0.5f),
+                                spotColor = RegainTeal.copy(alpha = 0.5f)
+                            ),
                         colors = ButtonDefaults.buttonColors(containerColor = DarkCard),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            focusedElevation = 0.dp,
+                            hoveredElevation = 0.dp
+                        )
                     ) {
                         Icon(Icons.Default.Pause, contentDescription = null, tint = RegainTeal)
                         Spacer(Modifier.width(8.dp))
@@ -227,9 +258,25 @@ fun FocusTimerScreen() {
             } else {
                 Button(
                     onClick = { if (remainingSeconds == 0) remainingSeconds = selectedDuration * 60; isTimerRunning = true },
-                    modifier = Modifier.fillMaxWidth().height(60.dp).border(1.dp, Brush.linearGradient(listOf(RegainTeal, RegainPurple)), RoundedCornerShape(16.dp)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .shadow(
+                            elevation = 14.dp,
+                            shape = RoundedCornerShape(16.dp),
+                            clip = false,
+                            ambientColor = RegainTeal.copy(alpha = 0.5f),
+                            spotColor = RegainPurple.copy(alpha = 0.5f)
+                        )
+                        .border(1.dp, Brush.linearGradient(listOf(RegainTeal, RegainPurple)), RoundedCornerShape(16.dp)),
                     colors = ButtonDefaults.buttonColors(containerColor = DarkCard),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 0.dp,
+                        pressedElevation = 0.dp,
+                        focusedElevation = 0.dp,
+                        hoveredElevation = 0.dp
+                    )
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, tint = RegainTeal, modifier = Modifier.size(28.dp))
                     Spacer(Modifier.width(12.dp))
@@ -300,9 +347,24 @@ fun SessionCompleteScreen(duration: Int, onDismiss: () -> Unit) {
             Spacer(Modifier.height(40.dp))
             Button(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .shadow(
+                        elevation = 12.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        clip = false,
+                        ambientColor = RegainTeal.copy(alpha = 0.5f),
+                        spotColor = RegainTeal.copy(alpha = 0.5f)
+                    ),
                 colors = ButtonDefaults.buttonColors(containerColor = RegainTeal),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 0.dp,
+                    pressedElevation = 0.dp,
+                    focusedElevation = 0.dp,
+                    hoveredElevation = 0.dp
+                )
             ) {
                 Text("Continue", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }

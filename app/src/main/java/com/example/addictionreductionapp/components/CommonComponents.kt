@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -39,6 +40,13 @@ fun GradientButton(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
+            .shadow(
+                elevation = 12.dp,
+                shape = RoundedCornerShape(16.dp),
+                clip = false,
+                ambientColor = RegainTeal.copy(alpha = 0.5f),
+                spotColor = RegainPurple.copy(alpha = 0.5f)
+            )
             .border(
                 1.dp,
                 Brush.linearGradient(listOf(RegainTeal, RegainPurple)),
@@ -49,6 +57,12 @@ fun GradientButton(
             disabledContainerColor = DarkCard.copy(alpha = 0.5f)
         ),
         shape = RoundedCornerShape(16.dp),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp
+        ),
         enabled = enabled
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -81,9 +95,22 @@ fun PrimaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(56.dp)
+            .shadow(
+                elevation = 12.dp,
+                shape = RoundedCornerShape(16.dp),
+                clip = false,
+                ambientColor = RegainTeal.copy(alpha = 0.5f),
+                spotColor = RegainTeal.copy(alpha = 0.5f)
+            ),
         colors = ButtonDefaults.buttonColors(containerColor = RegainTeal),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp
+        )
     ) {
         Text(
             text,

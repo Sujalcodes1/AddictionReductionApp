@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import dagger.hilt.android.AndroidEntryPoint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -59,11 +60,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-<<<<<<< HEAD
 import androidx.compose.ui.platform.LocalContext
-=======
->>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -84,16 +83,14 @@ import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.screens.AICoachScreen
 import com.example.addictionreductionapp.screens.AnalyticsScreen
 import com.example.addictionreductionapp.screens.AppBlockerScreen
+import com.example.addictionreductionapp.screens.DbDebugScreen
 import com.example.addictionreductionapp.screens.FocusTimerScreen
 import com.example.addictionreductionapp.screens.TimerScreen
 import com.example.addictionreductionapp.screens.HomeScreen
 import com.example.addictionreductionapp.screens.OnboardingScreen
 import com.example.addictionreductionapp.screens.ProfileScreen
-<<<<<<< HEAD
 import com.example.addictionreductionapp.screens.LoginScreen
 import com.example.addictionreductionapp.screens.RegisterScreen
-=======
->>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
 import com.example.addictionreductionapp.ui.theme.DarkBackground
 import com.example.addictionreductionapp.ui.theme.ErrorRed
 import com.example.addictionreductionapp.ui.theme.RegainOrange
@@ -104,6 +101,7 @@ import com.example.addictionreductionapp.ui.theme.TextWhite
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private var isBlockTriggered = mutableStateOf(false)
     private var blockedAppName = mutableStateOf("")
@@ -120,8 +118,8 @@ class MainActivity : ComponentActivity() {
         // FIX 2 — Full screen: hide status bar
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.hide(WindowInsetsCompat.Type.statusBars())
-        windowInsetsController.systemBarsBehavior =
+        windowInsetsController?.hide(WindowInsetsCompat.Type.statusBars())
+        windowInsetsController?.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 
         setContent {
@@ -214,10 +212,7 @@ fun AppRoot(
     val currentRoute = remember(navBackStackEntry) { navBackStackEntry?.destination?.route }
 
     val showOnboarding = !AppDataStore.hasCompletedOnboarding.value
-<<<<<<< HEAD
     val isLoggedIn = AppDataStore.isLoggedIn.value
-=======
->>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
 
     // Store block info for the composable to use
     var currentBlockedApp by remember { mutableStateOf("") }
@@ -253,10 +248,9 @@ fun AppRoot(
         },
         containerColor = DarkBackground
     ) { padding ->
-        Box(Modifier.padding(padding)) {
+        Box(Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
-<<<<<<< HEAD
                 startDestination = if (!isLoggedIn) "login" else if (showOnboarding) "onboarding" else "home",
                 enterTransition = { EnterTransition.None },
                 exitTransition = { ExitTransition.None }
@@ -288,12 +282,6 @@ fun AppRoot(
                     )
                 }
 
-=======
-                startDestination = if (showOnboarding) "onboarding" else "home",
-                enterTransition = { EnterTransition.None },
-                exitTransition = { ExitTransition.None }
-            ) {
->>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
                 composable("onboarding") {
                     OnboardingScreen(
                         onComplete = {
@@ -305,60 +293,64 @@ fun AppRoot(
                 }
 
                 composable("home") {
-                    HomeScreen(
-                        onStartFocus = { navController.navigate("timer") },
-                        onNavigateToApps = { navController.navigate("app_blocker") }
-                    )
+                    Box(Modifier.padding(padding)) {
+                        HomeScreen(
+                            onStartFocus = { navController.navigate("timer") },
+                            onNavigateToApps = { navController.navigate("app_blocker") }
+                        )
+                    }
                 }
 
                 composable("timer") {
-                    TimerScreen()
+                    Box(Modifier.padding(padding)) {
+                        TimerScreen()
+                    }
                 }
 
                 composable("analytics") {
-                    AnalyticsScreen()
+                    Box(Modifier.padding(padding)) {
+                        AnalyticsScreen()
+                    }
                 }
 
                 composable("coach") {
-                    AICoachScreen()
+                    Box(Modifier.padding(padding)) {
+                        AICoachScreen()
+                    }
                 }
 
                 composable("profile") {
-<<<<<<< HEAD
                     val context = LocalContext.current
-                    ProfileScreen(
-                        onNavigateToApps = { navController.navigate("app_blocker") },
-                        onLogout = {
-                            AppDataStore.isLoggedIn.value = false
-                            AppDataStore.saveToPrefs(context)
-                            navController.navigate("login") {
-                                popUpTo(0) { inclusive = true }
-                            }
-                        }
-=======
-                    ProfileScreen(
-                        onNavigateToApps = { navController.navigate("app_blocker") }
->>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
-                    )
+                    Box(Modifier.padding(padding)) {
+                        ProfileScreen(
+                            onNavigateToApps = { navController.navigate("app_blocker") },
+                            onLogout = {
+                                AppDataStore.isLoggedIn.value = false
+                                AppDataStore.saveToPrefs(context)
+                                navController.navigate("login") {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            },
+                            onNavigateToDbDebug = { navController.navigate("db_debug") }
+                        )
+                    }
                 }
 
                 composable("settings") {
-<<<<<<< HEAD
                     val context = LocalContext.current
-                    ProfileScreen(
-                        onNavigateToApps = { navController.navigate("app_blocker") },
-                        onLogout = {
-                            AppDataStore.isLoggedIn.value = false
-                            AppDataStore.saveToPrefs(context)
-                            navController.navigate("login") {
-                                popUpTo(0) { inclusive = true }
-                            }
-                        }
-=======
-                    ProfileScreen(
-                        onNavigateToApps = { navController.navigate("app_blocker") }
->>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
-                    )
+                    Box(Modifier.padding(padding)) {
+                        ProfileScreen(
+                            onNavigateToApps = { navController.navigate("app_blocker") },
+                            onLogout = {
+                                AppDataStore.isLoggedIn.value = false
+                                AppDataStore.saveToPrefs(context)
+                                navController.navigate("login") {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            },
+                            onNavigateToDbDebug = { navController.navigate("db_debug") }
+                        )
+                    }
                 }
 
                 composable("app_blocker") {
@@ -366,6 +358,14 @@ fun AppRoot(
                         onBack = { navController.popBackStack() }
                     )
                 }
+
+                // ── DEBUG ONLY — Remove before shipping to production ──────────
+                composable("db_debug") {
+                    DbDebugScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+                // ── END DEBUG ─────────────────────────────────────────────────
 
                 composable("block") {
                     BlockScreen(
@@ -458,13 +458,28 @@ fun BlockScreen(
                 fontSize = 14.sp
             )
             Spacer(Modifier.height(32.dp))
+            val buttonColor = if (reason == "focus") RegainTeal else accentColor
             Button(
                 onClick = onExit,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (reason == "focus") RegainTeal else accentColor
+                    containerColor = buttonColor
                 ),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(48.dp)
+                modifier = Modifier
+                    .height(48.dp)
+                    .shadow(
+                        elevation = 12.dp,
+                        shape = RoundedCornerShape(12.dp),
+                        clip = false,
+                        ambientColor = buttonColor.copy(alpha = 0.5f),
+                        spotColor = buttonColor.copy(alpha = 0.5f)
+                    ),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 0.dp,
+                    pressedElevation = 0.dp,
+                    focusedElevation = 0.dp,
+                    hoveredElevation = 0.dp
+                )
             ) {
                 Text(
                     "Return Home",

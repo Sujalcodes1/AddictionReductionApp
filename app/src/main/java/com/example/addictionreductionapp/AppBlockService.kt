@@ -1,253 +1,285 @@
 package com.example.addictionreductionapp
 
 import android.accessibilityservice.AccessibilityService
-import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import com.example.addictionreductionapp.data.AppDataStore
+import com.example.addictionreductionapp.repository.AppUsageRepository
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
 import java.util.*
+import javax.inject.Inject
 
+/**
+ * Accessibility service responsible for detecting foreground apps and blocking
+ * them when their daily usage limit is exceeded, focus mode is active, or a
+ * scheduled block window is active.
+ *
+ * ## Data source
+ * App limits and focus mode state are read from [AppDataStore] (SharedPreferences),
+ * which is the same source the UI ([AppBlockerScreen], [HomeScreen]) writes to.
+ * Daily usage totals are read from [AppUsageRepository] (Room), which is populated
+ * by [AppUsageTrackingService].
+ *
+ * ## Blocking flow
+ * 1. [onAccessibilityEvent] fires when any window comes to the foreground.
+ * 2. [checkCurrentAppUsage] is called immediately AND on a 2-second polling loop.
+ * 3. Limit/focus/schedule checks run on [Dispatchers.IO].
+ * 4. If a block is needed, [triggerBlock] posts a HOME action + MainActivity launch
+ *    back to the main thread via [handler].
+ */
+@AndroidEntryPoint
 class AppBlockService : AccessibilityService() {
+
+    @Inject
+    lateinit var appUsageRepository: AppUsageRepository
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
         private const val TAG = "AppBlockService"
-        private const val PREFS_NAME = "regain_prefs"
+
+        /** Minimum ms between two block actions for the same package. */
+        private const val BLOCK_COOLDOWN_MS = 5_000L
+
+        /** How often the polling loop fires. */
+        private const val POLL_INTERVAL_MS = 2_000L
+
+        private val DATE_FMT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     }
 
     private val handler = Handler(Looper.getMainLooper())
     private var lastActivePackage: String? = null
+    private var activePackageStartElapsed: Long = 0L
+    private var lastBlockedPackage: String? = null
     private var lastBlockedTime: Long = 0L
 
-    // FIX 1 — Comprehensive whitelist: packages that must NEVER be blocked
-    private val blockedPackageWhitelist = setOf(
-        "com.example.addictionreductionapp",       // our own app
+    // ── Packages that must NEVER be blocked ──────────────────────────────────
+    private val systemPackageWhitelist = setOf(
+        "com.example.addictionreductionapp",
         "com.android.systemui",
         "com.android.launcher",
         "com.android.launcher2",
         "com.android.launcher3",
         "com.google.android.apps.nexuslauncher",
-        "com.miui.home",                           // Xiaomi launcher
-        "com.sec.android.app.launcher",            // Samsung launcher
-        "com.huawei.android.launcher",             // Huawei launcher
+        "com.miui.home",
+        "com.sec.android.app.launcher",
+        "com.huawei.android.launcher",
         "com.oppo.launcher",
         "com.vivo.launcher",
-        "com.android.settings"
+        "com.realme.launcher",
+        "com.oneplus.launcher",
+        "com.android.settings",
+        "com.android.phone",
+        "com.google.android.dialer",
+        "com.samsung.android.dialer"
     )
 
-    // List of packages to monitor - must match AppDataStore defaults
-    private val monitoredApps = listOf(
-        "com.instagram.android",
-        "com.zhiliaoapp.musically",
-        "com.google.android.youtube",
-        "com.twitter.android",
-        "com.netflix.mediaclient",
-        "com.snapchat.android",
-        "com.facebook.katana",
-        "com.reddit.frontpage",
-        "com.whatsapp",
-        "org.telegram.messenger"
-    )
-
+    // ── Background polling loop ───────────────────────────────────────────────
     private val checkRunnable = object : Runnable {
         override fun run() {
             checkCurrentAppUsage()
-            handler.postDelayed(this, 2000)
+            handler.postDelayed(this, POLL_INTERVAL_MS)
         }
     }
 
+    // ── Service lifecycle ─────────────────────────────────────────────────────
+
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Log.d(TAG, "AppBlockService connected")
+        Log.i(TAG, "AppBlockService CONNECTED — polling every ${POLL_INTERVAL_MS}ms")
         handler.post(checkRunnable)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val packageName = event.packageName?.toString() ?: return
-            // FIX 2 — whitelist guard: never track our own app or launchers
-            if (packageName in blockedPackageWhitelist) return
-            if (packageName.startsWith("com.android.launcher") ||
-                packageName.startsWith("android")
-            ) return
-            lastActivePackage = packageName
-            Log.d(TAG, "Window changed to: $packageName")
-            checkCurrentAppUsage()
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val pkg = event.packageName?.toString() ?: return
+        if (isSystemPackage(pkg)) return
+
+        if (pkg != lastActivePackage) {
+            Log.d(TAG, "Foreground changed: $pkg")
+            lastActivePackage = pkg
+            activePackageStartElapsed = SystemClock.elapsedRealtime()
         }
+
+        // Immediate check on foreground change (don't wait for poll)
+        checkCurrentAppUsage()
     }
 
-    private fun getCurrentForegroundPackage(): String? {
-        // Try UsageStatsManager as primary source
-        try {
-            val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-                ?: return lastActivePackage
-            val endTime = System.currentTimeMillis()
-            val startTime = endTime - 5000 // last 5 seconds
-            val events = usageStatsManager.queryEvents(startTime, endTime)
-            val event = android.app.usage.UsageEvents.Event()
-            var latestPackage: String? = null
-            var latestTime: Long = 0
-            while (events.hasNextEvent()) {
-                events.getNextEvent(event)
-                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
-                    event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND
-                ) {
-                    // Never treat our own app as the foreground package to block
-                    if (event.packageName == packageName) continue
-                    if (event.timeStamp > latestTime) {
-                        latestTime = event.timeStamp
-                        latestPackage = event.packageName
-                    }
-                }
-            }
-            return latestPackage ?: lastActivePackage
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting foreground package", e)
-            return lastActivePackage
-        }
-    }
+    // ── Core blocking logic ───────────────────────────────────────────────────
 
     private fun checkCurrentAppUsage() {
-        // FIX 1 — Use lastActivePackage directly; whitelist guard is the very first check
-        val packageName = lastActivePackage ?: return
-
-        // CRITICAL: never block whitelisted packages (own app, launchers, system UI)
-        if (packageName in blockedPackageWhitelist) return
-        if (packageName.startsWith("com.android.launcher") ||
-            packageName.startsWith("android")
-        ) return
-
-        // FIX 3 — 3-second cooldown to prevent block-screen re-trigger loop
-        if (System.currentTimeMillis() - lastBlockedTime < 3000) return
-
-        // Read directly from SharedPreferences (NOT via Compose state objects)
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val focusActive = prefs.getBoolean("focus_mode_active", false)
-        val isSelected = prefs.getBoolean("${packageName}_selected", false)
-        val isWhitelisted = prefs.getBoolean("${packageName}_whitelisted", false)
-        val limitMinutes = prefs.getInt("${packageName}_limit", 60)
-        val scheduleStart = prefs.getInt("${packageName}_schedule_start", -1)
-        val scheduleEnd = prefs.getInt("${packageName}_schedule_end", -1)
-
-        // Only monitor selected, non-whitelisted apps
-        if (!isSelected || isWhitelisted) return
-
-        // Find the app name for the block screen message
-        val appName = getAppNameForPackage(packageName)
-
-        Log.d(TAG, "Checking $packageName: focusActive=$focusActive, selected=$isSelected, limit=$limitMinutes")
-
-        // Check block schedule first
-        if (scheduleStart >= 0 && scheduleEnd >= 0) {
-            val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-            val inSchedule = if (scheduleStart <= scheduleEnd) {
-                currentHour in scheduleStart until scheduleEnd
-            } else {
-                currentHour >= scheduleStart || currentHour < scheduleEnd
-            }
-            if (inSchedule) {
-                Log.d(TAG, "Blocking $packageName: scheduled block")
-                blockApp(appName, "schedule")
-                lastActivePackage = null  // FIX 4 — reset so the loop doesn't re-fire
-                return
-            }
+        val packageName = lastActivePackage ?: run {
+            Log.v(TAG, "Limit check skipped — no foreground package tracked yet")
+            return
         }
+        if (isSystemPackage(packageName)) return
 
-        // Block if Focus Mode is active
-        if (focusActive) {
-            Log.d(TAG, "Blocking $packageName: focus mode active")
-            blockApp(appName, "focus")
-            lastActivePackage = null  // FIX 4 — reset so the loop doesn't re-fire
+        val now = System.currentTimeMillis()
+        if (packageName == lastBlockedPackage && now - lastBlockedTime < BLOCK_COOLDOWN_MS) {
+            Log.v(TAG, "Limit check skipped — cooldown active for $packageName")
             return
         }
 
-        // Check daily usage limit
-        if (isLimitExceeded(packageName, limitMinutes)) {
-            Log.d(TAG, "Blocking $packageName: limit exceeded")
-            blockApp(appName, "limit")
-            lastActivePackage = null  // FIX 4 — reset so the loop doesn't re-fire
-        }
-    }
+        Log.d(TAG, "Limit check started for $packageName")
 
-    private fun getAppNameForPackage(packageName: String): String {
-        return when (packageName) {
-            "com.instagram.android" -> "Instagram"
-            "com.zhiliaoapp.musically" -> "TikTok"
-            "com.google.android.youtube" -> "YouTube"
-            "com.twitter.android" -> "Twitter"
-            "com.netflix.mediaclient" -> "Netflix"
-            "com.snapchat.android" -> "Snapchat"
-            "com.facebook.katana" -> "Facebook"
-            "com.reddit.frontpage" -> "Reddit"
-            "com.whatsapp" -> "WhatsApp"
-            "org.telegram.messenger" -> "Telegram"
-            else -> packageName.substringAfterLast(".")
-        }
-    }
+        serviceScope.launch {
+            try {
+                // ── Read app config from AppDataStore (SharedPreferences) ──────
+                // AppDataStore is the authoritative config source — the UI writes there.
+                val prefs = getSharedPreferences("regain_prefs", Context.MODE_PRIVATE)
+                val isSelected = prefs.getBoolean("${packageName}_selected", false)
+                val isWhitelisted = prefs.getBoolean("${packageName}_whitelisted", false)
 
-    private fun isLimitExceeded(packageName: String, limitMinutes: Int): Boolean {
-        try {
-            val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val calendar = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
+                Log.d(TAG, "  isSelected=$isSelected, isWhitelisted=$isWhitelisted")
+
+                if (!isSelected) {
+                    Log.d(TAG, "  Skip — $packageName not selected for monitoring")
+                    return@launch
+                }
+                if (isWhitelisted) {
+                    Log.d(TAG, "  Skip — $packageName is whitelisted")
+                    return@launch
+                }
+
+                val focusActive = prefs.getBoolean("focus_mode_active", false)
+                val limitMinutes = prefs.getInt("${packageName}_limit", 60)
+                val scheduleStart = prefs.getInt("${packageName}_schedule_start", -1)
+                val scheduleEnd = prefs.getInt("${packageName}_schedule_end", -1)
+                val appName = getAppNameForPackage(packageName)
+
+                Log.d(TAG, "  focusActive=$focusActive, limitMinutes=$limitMinutes, schedule=[$scheduleStart,$scheduleEnd]")
+
+                // ── Priority 1: Scheduled block window ────────────────────────
+                if (scheduleStart >= 0 && scheduleEnd >= 0) {
+                    val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                    val inSchedule = if (scheduleStart <= scheduleEnd) {
+                        currentHour in scheduleStart until scheduleEnd
+                    } else {
+                        currentHour >= scheduleStart || currentHour < scheduleEnd
+                    }
+                    if (inSchedule) {
+                        Log.i(TAG, "LIMIT REACHED — $packageName in scheduled block window ($scheduleStart:00–$scheduleEnd:00)")
+                        withContext(Dispatchers.Main) {
+                            triggerBlock(packageName, appName, "schedule")
+                        }
+                        return@launch
+                    }
+                }
+
+                // ── Priority 2: Focus Mode active ─────────────────────────────
+                if (focusActive) {
+                    Log.i(TAG, "LIMIT REACHED — $packageName blocked by focus mode")
+                    withContext(Dispatchers.Main) {
+                        triggerBlock(packageName, appName, "focus")
+                    }
+                    return@launch
+                }
+
+                // ── Priority 3: Daily usage limit exceeded ────────────────────
+                val today = DATE_FMT.format(Date())
+                val savedUsage = appUsageRepository.getUsageForAppOnDate(packageName, today)
+                val savedMinutes = savedUsage?.usageMinutes ?: 0
+                // Add live untracked time for the current active session
+                val liveSessionMs = if (packageName == lastActivePackage && activePackageStartElapsed > 0L) {
+                    SystemClock.elapsedRealtime() - activePackageStartElapsed
+                } else 0L
+                val totalMinutes = savedMinutes + (liveSessionMs / 60_000L).toInt()
+
+                Log.d(TAG, "  Current usage fetched: savedMinutes=$savedMinutes, liveSessionMs=${liveSessionMs}ms, totalMinutes=$totalMinutes / $limitMinutes")
+
+                if (totalMinutes >= limitMinutes) {
+                    Log.i(TAG, "LIMIT REACHED — $packageName: ${totalMinutes}m >= ${limitMinutes}m limit. Blocking triggered.")
+                    withContext(Dispatchers.Main) {
+                        triggerBlock(packageName, appName, "limit")
+                    }
+                } else {
+                    Log.d(TAG, "  $packageName within limit: ${totalMinutes}m / ${limitMinutes}m")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in checkCurrentAppUsage for $packageName", e)
             }
-            val startTime = calendar.timeInMillis
-            val endTime = System.currentTimeMillis()
-
-            val stats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY, startTime, endTime
-            )
-            val totalTime = stats.filter { it.packageName == packageName }
-                .sumOf { it.totalTimeInForeground }
-
-            val limitInMillis = limitMinutes * 60 * 1000L
-            return totalTime >= limitInMillis
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking usage limit", e)
-            return false
         }
     }
 
-    private fun blockApp(appName: String, reason: String) {
+    // ── Block action ──────────────────────────────────────────────────────────
+
+    /**
+     * Must be called from the main thread (use [withContext(Dispatchers.Main)]).
+     */
+    private fun triggerBlock(packageName: String, appName: String, reason: String) {
+        lastBlockedPackage = packageName
         lastBlockedTime = System.currentTimeMillis()
-        Log.d(TAG, "Blocking app: $appName reason: $reason")
+        // Clear so the polling loop doesn't re-trigger while block screen shows
+        lastActivePackage = null
 
-        // Use performGlobalAction to go home (more reliable than launching home intent)
+        Log.i(TAG, "BLOCKING TRIGGERED — package=$packageName reason=$reason")
+
+        // 1. Immediately navigate to home screen
         performGlobalAction(GLOBAL_ACTION_HOME)
+        Log.d(TAG, "  performGlobalAction(HOME) called")
 
-        // Small delay to let the home screen appear, then launch our block screen
+        // 2. After a short delay, bring MainActivity to foreground with block screen
         handler.postDelayed({
             try {
                 val intent = Intent(this, MainActivity::class.java).apply {
                     addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK or
-                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
                     )
                     putExtra("show_block_screen", true)
                     putExtra("blocked_app_name", appName)
                     putExtra("block_reason", reason)
                 }
                 startActivity(intent)
+                Log.i(TAG, "OVERLAY LAUNCHED — MainActivity started with block screen for $appName ($reason)")
             } catch (e: Exception) {
-                Log.e(TAG, "Error launching block screen", e)
+                Log.e(TAG, "ERROR — Failed to launch block screen overlay", e)
             }
-        }, 300)
+        }, 400L)
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun isSystemPackage(pkg: String): Boolean =
+        pkg in systemPackageWhitelist ||
+        pkg.startsWith("com.android.launcher") ||
+        pkg.startsWith("android")
+
+    private fun getAppNameForPackage(packageName: String): String = when (packageName) {
+        "com.instagram.android"      -> "Instagram"
+        "com.zhiliaoapp.musically"   -> "TikTok"
+        "com.google.android.youtube" -> "YouTube"
+        "com.twitter.android"        -> "Twitter"
+        "com.netflix.mediaclient"    -> "Netflix"
+        "com.snapchat.android"       -> "Snapchat"
+        "com.facebook.katana"        -> "Facebook"
+        "com.reddit.frontpage"       -> "Reddit"
+        "com.whatsapp"               -> "WhatsApp"
+        "org.telegram.messenger"     -> "Telegram"
+        else -> packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(checkRunnable)
-        Log.d(TAG, "AppBlockService destroyed")
+        serviceScope.cancel()
+        Log.i(TAG, "AppBlockService DESTROYED")
     }
 
     override fun onInterrupt() {
-        Log.d(TAG, "AppBlockService interrupted")
+        Log.w(TAG, "AppBlockService INTERRUPTED")
     }
 }

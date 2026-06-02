@@ -24,6 +24,10 @@ import androidx.compose.ui.unit.sp
 import com.example.addictionreductionapp.components.*
 import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.*
+import com.example.addictionreductionapp.utils.PermissionUtils
+import android.provider.Settings
+import android.content.Intent
+import android.net.Uri
 import kotlinx.coroutines.delay
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -138,12 +142,67 @@ fun HomeScreen(
             )
         }
 
+        val hasUsage = PermissionUtils.hasUsageAccess(context)
+        val hasOverlay = PermissionUtils.hasOverlayPermission(context)
+        val hasAccessibility = PermissionUtils.hasAccessibilityPermission(context)
+
     Column(
         Modifier
             .fillMaxSize()
             .padding(20.dp)
             .verticalScroll(scrollState)
     ) {
+        if (!hasUsage || !hasOverlay || !hasAccessibility) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.15f)),
+                border = BorderStroke(1.dp, ErrorRed),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = ErrorRed)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Permissions Required", color = ErrorRed, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("The app blocker needs the following permissions to work:", color = TextWhite, fontSize = 13.sp)
+                    Spacer(Modifier.height(8.dp))
+
+                    if (!hasUsage) {
+                        Button(
+                            onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply { data = Uri.parse("package:${context.packageName}") }) },
+                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("1. Grant Usage Access", color = Color.White)
+                        }
+                    }
+                    if (!hasOverlay) {
+                        Button(
+                            onClick = { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply { data = Uri.parse("package:${context.packageName}") }) },
+                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("2. Grant Display Over Other Apps", color = Color.White)
+                        }
+                    }
+                    if (!hasAccessibility) {
+                        Button(
+                            onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("3. Enable Accessibility Service", color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
         // Header
         Row(
             Modifier.fillMaxWidth(),
@@ -279,7 +338,14 @@ fun HomeScreen(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .height(56.dp)
+                .shadow(
+                    elevation = if (isFocusActive) 12.dp else 0.dp,
+                    shape = RoundedCornerShape(14.dp),
+                    clip = false,
+                    ambientColor = Color(0xFF00BFA5).copy(alpha = 0.5f),
+                    spotColor = Color(0xFF00BFA5).copy(alpha = 0.5f)
+                ),
             shape = RoundedCornerShape(14.dp),
             border = androidx.compose.foundation.BorderStroke(
                 1.5.dp,
@@ -287,6 +353,12 @@ fun HomeScreen(
             ),
             colors = ButtonDefaults.outlinedButtonColors(
                 containerColor = Color.Transparent
+            ),
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = 0.dp,
+                pressedElevation = 0.dp,
+                focusedElevation = 0.dp,
+                hoveredElevation = 0.dp
             )
         ) {
             Icon(

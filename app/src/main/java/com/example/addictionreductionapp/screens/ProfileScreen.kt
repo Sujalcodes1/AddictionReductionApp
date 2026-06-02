@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,14 +28,11 @@ import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.*
 
 @Composable
-<<<<<<< HEAD
 fun ProfileScreen(
     onNavigateToApps: () -> Unit,
-    onLogout: () -> Unit = {}
+    onLogout: () -> Unit = {},
+    onNavigateToDbDebug: () -> Unit = {}
 ) {
-=======
-fun ProfileScreen(onNavigateToApps: () -> Unit) {
->>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showNameDialog by remember { mutableStateOf(false) }
@@ -223,16 +221,23 @@ fun ProfileScreen(onNavigateToApps: () -> Unit) {
             onClick = { }
         )
 
-<<<<<<< HEAD
         SettingsItem(
-            icon = Icons.Default.ExitToApp,
+            icon = Icons.AutoMirrored.Filled.ExitToApp,
             title = "Logout",
             subtitle = "Sign out of your account",
             onClick = onLogout
         )
 
-=======
->>>>>>> 64f9bf7574525cae2aab0c9fd49a5ccb21344266
+        // ── DEBUG ONLY — Remove before shipping ──────────────────────────────
+        SettingsItem(
+            icon = Icons.Default.BugReport,
+            title = "Room DB Inspector",
+            subtitle = "Debug: view & insert focus_sessions",
+            onClick = onNavigateToDbDebug,
+            iconTint = RegainAmber
+        )
+        // ── END DEBUG ────────────────────────────────────────────────────────
+
         Spacer(Modifier.height(24.dp))
     }
 
@@ -311,7 +316,8 @@ private fun SettingsItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    iconTint: androidx.compose.ui.graphics.Color = RegainTeal
 ) {
     Card(
         modifier = Modifier
@@ -331,7 +337,7 @@ private fun SettingsItem(
                 modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = RegainTeal, modifier = Modifier.size(20.dp))
+                    Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
                 }
             }
             Spacer(Modifier.width(12.dp))

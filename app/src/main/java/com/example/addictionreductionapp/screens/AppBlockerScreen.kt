@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.shadow
 import com.example.addictionreductionapp.components.GradientButton
 import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.*
@@ -288,9 +289,22 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
             onClick = { onBack?.invoke() },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .height(56.dp)
+                .shadow(
+                    elevation = 12.dp,
+                    shape = RoundedCornerShape(16.dp),
+                    clip = false,
+                    ambientColor = RegainTeal.copy(alpha = 0.5f),
+                    spotColor = RegainTeal.copy(alpha = 0.5f)
+                ),
             colors = ButtonDefaults.buttonColors(containerColor = RegainTeal),
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(16.dp),
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = 0.dp,
+                pressedElevation = 0.dp,
+                focusedElevation = 0.dp,
+                hoveredElevation = 0.dp
+            )
         ) {
             Text(
                 "Save & Close",

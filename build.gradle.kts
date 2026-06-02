@@ -2,5 +2,11 @@
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.android) apply false
+    // Required in Kotlin 2.x: drives the Compose compiler extension (replaces
+    // the old composeOptions { kotlinCompilerExtensionVersion } block)
     alias(libs.plugins.kotlin.compose) apply false
+    // KSP — replaces KAPT for Room and Hilt annotation processing in Kotlin 2.x
+    alias(libs.plugins.ksp) apply false
+    // Hilt — Dagger DI framework for Android
+    alias(libs.plugins.hilt.android) apply false
 }
