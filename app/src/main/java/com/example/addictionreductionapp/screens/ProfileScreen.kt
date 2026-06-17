@@ -33,6 +33,7 @@ fun ProfileScreen(
     onLogout: () -> Unit = {},
     onNavigateToDbDebug: () -> Unit = {}
 ) {
+    val startCompose = android.os.SystemClock.elapsedRealtime()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showNameDialog by remember { mutableStateOf(false) }
@@ -282,6 +283,10 @@ fun ProfileScreen(
             containerColor = DarkCard,
             shape = RoundedCornerShape(20.dp)
         )
+    }
+    androidx.compose.runtime.SideEffect {
+        val duration = android.os.SystemClock.elapsedRealtime() - startCompose
+        android.util.Log.d("PerfDebug", "SettingsScreen composed in $duration ms")
     }
 }
 

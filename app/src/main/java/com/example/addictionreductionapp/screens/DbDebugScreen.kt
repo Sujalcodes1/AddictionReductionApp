@@ -27,6 +27,15 @@ import com.example.addictionreductionapp.viewmodel.FocusSessionViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.addictionreductionapp.data.local.entities.DailyBehaviorSnapshotEntity
+import com.example.addictionreductionapp.data.local.dao.DailyBehaviorSnapshotDao
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 /**
  * TEMPORARY DEBUG SCREEN — Room Database Inspector
@@ -153,6 +162,28 @@ fun DbDebugScreen(
             }
         }
 
+        val seederViewModel: DebugSeederViewModel = hiltViewModel()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = { seederViewModel.seedFakeSnapshots() },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = RegainOrange),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text(
+                    "Seed 20 Fake Snapshots",
+                    color = DarkBackground,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+        }
+
         HorizontalDivider(color = Color(0xFF1E2D3D), thickness = 1.dp)
 
         // ── Column headers ────────────────────────────────────────────────────
@@ -259,3 +290,44 @@ private fun MonoText(text: String, color: Color = TextWhite) {
 @Composable
 private fun <T> remember(key: T, calculation: () -> String): String =
     androidx.compose.runtime.remember(key) { calculation() }
+
+@HiltViewModel
+class DebugSeederViewModel @Inject constructor(
+    private val snapshotDao: DailyBehaviorSnapshotDao
+) : ViewModel() {
+
+    fun seedFakeSnapshots() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            val today = LocalDate.now()
+
+            for (i in 0 until 20) {
+                // i=0 is 20 days ago, i=19 is 1 day ago
+                val daysAgo = 20 - i
+                val date = today.minusDays(daysAgo.toLong())
+
+                // Linearly interpolate values across the 20 days
+                val focus = 100 - ((i * 60) / 19) // 100 -> 40
+                val screenTime = 20 + ((i * 40) / 19) // 20 -> 60
+                val risk = 0.1f + ((i * 0.8f) / 19f) // 0.1 -> 0.9
+
+                val entity = DailyBehaviorSnapshotEntity(
+                    date = date.format(formatter),
+                    totalScreenTimeMinutes = screenTime,
+                    totalOpens = 50 + (i * 2),
+                    focusScore = focus,
+                    productiveRatio = 0.8f - (i * 0.02f),
+                    distractionRatio = 0.2f + (i * 0.02f),
+                    appSwitches = 20 + i,
+                    overallRiskScore = risk,
+                    doomscrollDetected = i > 10,
+                    compulsiveSwitchingDetected = i > 12,
+                    lateNightUsageDetected = i > 15,
+                    relapseDetected = i == 19,
+                    createdAt = System.currentTimeMillis()
+                )
+                snapshotDao.insertSnapshot(entity)
+            }
+        }
+    }
+}

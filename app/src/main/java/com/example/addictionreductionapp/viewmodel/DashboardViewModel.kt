@@ -7,6 +7,8 @@ import com.example.addictionreductionapp.data.analytics.FocusScoreEngine
 import com.example.addictionreductionapp.data.analytics.StreakEngine
 import com.example.addictionreductionapp.data.models.FocusScoreDetails
 import com.example.addictionreductionapp.data.repository.AnalyticsRepository
+import com.example.addictionreductionapp.data.repository.DailyBehaviorSnapshotRepository
+import com.example.addictionreductionapp.data.local.entities.DailyBehaviorSnapshotEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -24,13 +27,15 @@ class DashboardViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
     private val focusScoreEngine: FocusScoreEngine,
     private val streakEngine: StreakEngine,
-    private val behaviorEngine: BehavioralIntelligenceEngine
+    private val behaviorEngine: BehavioralIntelligenceEngine,
+    private val dailyBehaviorSnapshotRepository: DailyBehaviorSnapshotRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(DashboardUiState(isLoading = true))
+    private val _uiState = MutableStateFlow(DashboardUiState(isLoading = false))
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
     init {
+        android.util.Log.d("NavDebug", "DashboardViewModel INITIALIZED (hashCode=${hashCode()})")
         loadDashboardData()
     }
 
@@ -40,105 +45,112 @@ class DashboardViewModel @Inject constructor(
         val startDate7 = LocalDate.now().minusDays(7).format(formatter)
         val startDate30 = LocalDate.now().minusDays(30).format(formatter)
 
-        // ── Today's metrics ─────────────────────────────────────────────────
-        val screenTimeFlow = analyticsRepository.getTotalScreenTimeToday(today)
-        val opensFlow = analyticsRepository.getTotalOpensToday(today)
-        val categoryFlow = analyticsRepository.getCategoryTotalsToday(today)
-        val topAppsFlow = analyticsRepository.getMostUsedAppsToday(today)
-        val hourlyFlow = analyticsRepository.getHourlyUsageToday(today)
-        val weeklyFlow = analyticsRepository.getWeeklyUsageTotal(startDate7, today)
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            // 1. Basic Overview (Screen Time)
+            launch {
+                analyticsRepository.getTotalScreenTimeToday(today)
+                    .catch { }
+                    .collect { time ->
+                        _uiState.update { it.copy(todayScreenTime = time ?: 0) }
+                    }
+            }
 
-        // ── Historical flows (real data from Room) ──────────────────────────
-        val historicalScoresFlow = analyticsRepository.getHistoricalFocusScoreList(startDate30, today)
-        val historicalDetailsFlow = analyticsRepository.getHistoricalFocusScores(startDate7, today)
+            // 2. Top Apps
+            launch {
+                analyticsRepository.getMostUsedAppsToday(today)
+                    .catch { }
+                    .collect { apps ->
+                        _uiState.update { it.copy(mostDistractingApp = apps.firstOrNull()?.appName) }
+                    }
+            }
 
-        // ── Stage 1: Today's core metrics ───────────────────────────────────
-        val todayMetricsFlow = combine(
-            screenTimeFlow,
-            opensFlow,
-            categoryFlow,
-            topAppsFlow
-        ) { time, opens, categories, topApps ->
-            DashboardTodayMetrics(
-                totalTime = time ?: 0,
-                totalOpens = opens ?: 0,
-                categories = categories,
-                topApps = topApps
-            )
+            // 3. Focus Score
+            launch {
+                combine(
+                    analyticsRepository.getTotalScreenTimeToday(today),
+                    analyticsRepository.getTotalOpensToday(today),
+                    analyticsRepository.getCategoryTotalsToday(today)
+                ) { time, opens, categories ->
+                    focusScoreEngine.calculateScore(time ?: 0, opens ?: 0, categories)
+                }
+                .catch { }
+                .collect { scoreDetails ->
+                    _uiState.update { it.copy(currentFocusScore = scoreDetails.score) }
+                }
+            }
+
+            // 4. Streaks
+            launch {
+                analyticsRepository.getHistoricalFocusScoreList(startDate30, today)
+                    .catch { }
+                    .collect { scores ->
+                        val streak = streakEngine.calculateStreak(scores)
+                        _uiState.update { it.copy(currentStreak = streak.streakInfo.currentStreakDays) }
+                    }
+            }
+
+            // 5. Behavioral Intelligence
+            launch {
+                val todayMetricsFlow = combine(
+                    analyticsRepository.getTotalScreenTimeToday(today),
+                    analyticsRepository.getTotalOpensToday(today),
+                    analyticsRepository.getCategoryTotalsToday(today),
+                    analyticsRepository.getMostUsedAppsToday(today)
+                ) { time, opens, categories, topApps ->
+                    DashboardTodayMetrics(time ?: 0, opens ?: 0, categories, topApps)
+                }
+
+                val supportFlow = combine(
+                    analyticsRepository.getHourlyUsageToday(today),
+                    analyticsRepository.getWeeklyUsageTotal(startDate7, today),
+                    analyticsRepository.getHistoricalFocusScores(startDate7, today)
+                ) { hourly, weeklyTotal, details ->
+                    DashboardSupportData(hourly, weeklyTotal ?: 0, emptyList(), details)
+                }
+
+                combine(todayMetricsFlow, supportFlow) { metrics, support ->
+                    val weeklyAvg = if (support.weeklyTotal > 0) support.weeklyTotal / 7 else 0
+
+                    val focusScore = focusScoreEngine.calculateScore(
+                        metrics.totalTime, metrics.totalOpens, metrics.categories
+                    )
+                    val recentScores = buildRecentScoreList(support.historicalDetails, focusScore)
+
+                    val snapshot = behaviorEngine.generateSnapshot(
+                        usageToday = metrics.topApps,
+                        hourlyUsage = support.hourly,
+                        totalOpens = metrics.totalOpens,
+                        totalScreenTimeMinutes = metrics.totalTime,
+                        weeklyAverageMinutes = weeklyAvg,
+                        recentScores = recentScores,
+                        timestamp = System.currentTimeMillis()
+                    )
+
+                    val warnings = mutableListOf<String>()
+                    if (focusScore.score < 50) {
+                        warnings.add("Focus score is low.")
+                    }
+                    if (snapshot.doomscroll.detected) {
+                        warnings.add("Doomscrolling detected in ${snapshot.doomscroll.appPackage}.")
+                    }
+                    if (snapshot.relapse.detected) {
+                        warnings.add("High risk of relapse detected.")
+                    }
+                    if (snapshot.lateNightUsage.detected) {
+                        warnings.add("Late night usage disrupting sleep.")
+                    }
+
+                    _uiState.update {
+                        it.copy(
+                            overallRiskScore = snapshot.overallRiskScore,
+                            activeWarnings = warnings
+                        )
+                    }
+                }
+                .catch { }
+                .collect { }
+            }
         }
-
-        // ── Stage 2: Hourly + weekly + historical ───────────────────────────
-        val supportFlow = combine(
-            hourlyFlow,
-            weeklyFlow,
-            historicalScoresFlow,
-            historicalDetailsFlow
-        ) { hourly, weeklyTotal, scores, details ->
-            DashboardSupportData(
-                hourly = hourly,
-                weeklyTotal = weeklyTotal ?: 0,
-                historicalScores = scores,
-                historicalDetails = details
-            )
-        }
-
-        // ── Final combination ───────────────────────────────────────────────
-        combine(todayMetricsFlow, supportFlow) { metrics, support ->
-            val weeklyAvg = if (support.weeklyTotal > 0) support.weeklyTotal / 7 else 0
-
-            val focusScore = focusScoreEngine.calculateScore(
-                metrics.totalTime, metrics.totalOpens, metrics.categories
-            )
-
-            // Build historical FocusScoreDetails: previous days + today's live score
-            val recentScores = buildRecentScoreList(support.historicalDetails, focusScore)
-
-            // Build full snapshot with real historical data
-            val snapshot = behaviorEngine.generateSnapshot(
-                usageToday = metrics.topApps,
-                hourlyUsage = support.hourly,
-                totalOpens = metrics.totalOpens,
-                totalScreenTimeMinutes = metrics.totalTime,
-                weeklyAverageMinutes = weeklyAvg,
-                recentScores = recentScores,
-                timestamp = System.currentTimeMillis()
-            )
-
-            // Calculate streak from real 30-day historical data
-            val streak = streakEngine.calculateStreak(support.historicalScores)
-
-            val mostDistracting = metrics.topApps.firstOrNull()?.appName
-
-            // Build active warnings deterministically
-            val warnings = mutableListOf<String>()
-            if (focusScore.score < 50) {
-                warnings.add("Focus score is low.")
-            }
-            if (snapshot.doomscroll.detected) {
-                warnings.add("Doomscrolling detected in ${snapshot.doomscroll.appPackage}.")
-            }
-            if (snapshot.relapse.detected) {
-                warnings.add("High risk of relapse detected.")
-            }
-            if (snapshot.lateNightUsage.detected) {
-                warnings.add("Late night usage disrupting sleep.")
-            }
-
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    error = null,
-                    currentFocusScore = focusScore.score,
-                    currentStreak = streak.streakInfo.currentStreakDays,
-                    todayScreenTime = metrics.totalTime,
-                    overallRiskScore = snapshot.overallRiskScore,
-                    activeWarnings = warnings,
-                    mostDistractingApp = mostDistracting
-                )
-            }
-        }.catch { e ->
-            _uiState.update { it.copy(isLoading = false, error = e.message ?: "Unknown error") }
-        }.launchIn(viewModelScope)
     }
 
     /**
@@ -155,6 +167,11 @@ class DashboardViewModel @Inject constructor(
             emptyList()
         }
         return previousDays + todayScore
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        android.util.Log.d("NavDebug", "DashboardViewModel CLEARED (hashCode=${hashCode()})")
     }
 }
 

@@ -11,6 +11,8 @@ import com.example.addictionreductionapp.data.models.FocusScoreDetails
 import com.example.addictionreductionapp.data.models.HourlyUsagePoint
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 
 class AnalyticsRepository @Inject constructor(
@@ -96,7 +98,7 @@ class AnalyticsRepository @Inject constructor(
                     categoryTotals = categories
                 )
             }
-        }
+        }.flowOn(Dispatchers.IO)
     }
 
     /**
@@ -126,7 +128,7 @@ class AnalyticsRepository @Inject constructor(
                 )
                 FocusScore(date = daily.date, score = details.score)
             }
-        }
+        }.flowOn(Dispatchers.IO)
     }
 }
 

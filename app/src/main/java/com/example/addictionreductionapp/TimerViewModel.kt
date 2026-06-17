@@ -32,6 +32,10 @@ class TimerViewModel @Inject constructor() : ViewModel() {
 
     private var timerJob: Job? = null
 
+    init {
+        android.util.Log.d("NavDebug", "TimerViewModel INITIALIZED (hashCode=${hashCode()})")
+    }
+
     fun startTimer() {
         if (isRunning.value) return
         isRunning.value = true
@@ -58,5 +62,6 @@ class TimerViewModel @Inject constructor() : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
+        android.util.Log.d("NavDebug", "TimerViewModel CLEARED (hashCode=${hashCode()})")
     }
 }

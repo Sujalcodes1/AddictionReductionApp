@@ -108,6 +108,59 @@ interface AnalyticsDao {
      */
     @Query("SELECT COALESCE(SUM(open_count), 0) FROM app_usage WHERE usage_date = :date")
     suspend fun getDailyOpensForDate(date: String): Int
+
+    @Query("""
+        SELECT package_name as packageName, app_name as appName, 
+               usage_minutes as totalMinutes, open_count as openCount
+        FROM app_usage 
+        WHERE usage_date = :date 
+        ORDER BY usage_minutes DESC
+    """)
+    suspend fun getMostUsedAppsForDate(date: String): List<AppUsageSummary>
+
+    @Query("""
+        SELECT app_category as category, SUM(usage_minutes) as totalMinutes 
+        FROM app_usage 
+        WHERE usage_date = :date 
+        GROUP BY app_category 
+        ORDER BY totalMinutes DESC
+    """)
+    suspend fun getCategoryTotalsForDate(date: String): List<CategoryAnalytics>
+
+    @Query("SELECT COALESCE(SUM(usage_minutes), 0) FROM app_usage WHERE usage_date >= :startDate AND usage_date <= :endDate")
+    suspend fun getWeeklyUsageTotalForDate(startDate: String, endDate: String): Int
+
+    @Query("""
+        SELECT cast(strftime('%H', datetime(start_timestamp / 1000, 'unixepoch', 'localtime')) as integer) as hourOfDay, 
+               SUM(usage_minutes) as minutesUsed
+        FROM app_usage 
+        WHERE usage_date = :date AND start_timestamp > 0
+        GROUP BY hourOfDay
+        ORDER BY hourOfDay ASC
+    """)
+    suspend fun getHourlyUsageForDate(date: String): List<HourlyUsagePoint>
+
+    @Query("""
+        SELECT usage_date as date,
+               SUM(usage_minutes) as totalScreenTimeMinutes,
+               SUM(open_count) as totalOpens
+        FROM app_usage
+        WHERE usage_date >= :startDate AND usage_date <= :endDate
+        GROUP BY usage_date
+        ORDER BY usage_date ASC
+    """)
+    suspend fun getDailyScreenTimeSeriesSuspend(startDate: String, endDate: String): List<DailyUsageSummary>
+
+    @Query("""
+        SELECT usage_date as date,
+               app_category as category,
+               SUM(usage_minutes) as totalMinutes
+        FROM app_usage
+        WHERE usage_date >= :startDate AND usage_date <= :endDate
+        GROUP BY usage_date, app_category
+        ORDER BY usage_date ASC, totalMinutes DESC
+    """)
+    suspend fun getDailyCategoryTotalsSuspend(startDate: String, endDate: String): List<DailyCategoryRow>
 }
 
 /**

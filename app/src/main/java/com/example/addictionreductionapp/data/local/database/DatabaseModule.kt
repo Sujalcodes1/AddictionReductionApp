@@ -88,4 +88,11 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideAnalyticsDao(db: AppDatabase): com.example.addictionreductionapp.data.local.dao.AnalyticsDao = db.analyticsDao()
+
+    /**
+     * Provides [DailyBehaviorSnapshotDao] for persisting historical behavioral snapshots.
+     */
+    @Provides
+    @Singleton
+    fun provideDailyBehaviorSnapshotDao(db: AppDatabase): com.example.addictionreductionapp.data.local.dao.DailyBehaviorSnapshotDao = db.dailyBehaviorSnapshotDao()
 }

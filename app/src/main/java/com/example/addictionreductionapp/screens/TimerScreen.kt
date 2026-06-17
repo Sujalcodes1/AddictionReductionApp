@@ -25,6 +25,7 @@ import com.example.addictionreductionapp.ui.theme.*
 
 @Composable
 fun TimerScreen() {
+    val startCompose = android.os.SystemClock.elapsedRealtime()
     val timerViewModel: TimerViewModel = viewModel()
     val elapsedSeconds by timerViewModel.elapsedSeconds.collectAsState()
     val isRunning by timerViewModel.isRunning.collectAsState()
@@ -34,32 +35,9 @@ fun TimerScreen() {
     val seconds = elapsedSeconds % 60
     val timeString = String.format("%02d:%02d:%02d", hours, minutes, seconds)
 
-    Box(Modifier.fillMaxSize()) {
-        // Background gradient
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        DarkBackground,
-                        Color(0xFF040D18),
-                        Color(0xFF081830),
-                        Color(0xFF040D18),
-                        DarkBackground
-                    )
-                )
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF00BFA5).copy(alpha = 0.06f),
-                        Color.Transparent
-                    ),
-                    radius = size.width * 0.65f
-                ),
-                radius = size.width * 0.65f,
-                center = Offset(size.width * 0.5f, size.height * 0.35f)
-            )
-        }
+    Box(Modifier.fillMaxSize()
+        .background(DarkBackground)
+    ) {
 
         Column(
             modifier = Modifier
@@ -184,5 +162,9 @@ fun TimerScreen() {
                 )
             }
         }
+    }
+    androidx.compose.runtime.SideEffect {
+        val duration = android.os.SystemClock.elapsedRealtime() - startCompose
+        android.util.Log.d("PerfDebug", "TimerScreen composed in $duration ms")
     }
 }

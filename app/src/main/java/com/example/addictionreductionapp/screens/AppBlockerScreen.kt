@@ -32,29 +32,9 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
     var showScheduleDialog by remember { mutableStateOf(false) }
     var scheduleAppIndex by remember { mutableIntStateOf(-1) }
 
-    Box(Modifier.fillMaxSize()) {
-        // Gradient background
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        DarkBackground,
-                        Color(0xFF030A08),
-                        Color(0xFF081410),
-                        Color(0xFF030A08),
-                        DarkBackground
-                    )
-                )
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(SuccessGreen.copy(alpha = 0.03f), Color.Transparent),
-                    radius = size.width * 0.6f
-                ),
-                radius = size.width * 0.6f,
-                center = Offset(size.width * 0.5f, size.height * 0.1f)
-            )
-        }
+    Box(Modifier.fillMaxSize()
+        .background(DarkBackground)
+    ) {
 
     Column(
         Modifier

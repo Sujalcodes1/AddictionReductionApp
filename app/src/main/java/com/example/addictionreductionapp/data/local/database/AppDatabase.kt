@@ -56,9 +56,10 @@ import com.example.addictionreductionapp.data.local.entities.UserProfileEntity
         AppLimitEntity::class,
         AppUsageEntity::class,
         FocusSessionEntity::class,
-        UserProfileEntity::class
+        UserProfileEntity::class,
+        com.example.addictionreductionapp.data.local.entities.DailyBehaviorSnapshotEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -80,6 +81,9 @@ abstract class AppDatabase : RoomDatabase() {
 
     /** DAO for analytics reads. */
     abstract fun analyticsDao(): com.example.addictionreductionapp.data.local.dao.AnalyticsDao
+
+    /** DAO for historical behavior snapshots. */
+    abstract fun dailyBehaviorSnapshotDao(): com.example.addictionreductionapp.data.local.dao.DailyBehaviorSnapshotDao
 
     // ── Manual singleton (for Workers / non-Hilt contexts) ────────────────────
 
@@ -123,7 +127,7 @@ abstract class AppDatabase : RoomDatabase() {
                 // Add new migrations here in version order. Room applies them
                 // sequentially; never use fallbackToDestructiveMigration() in
                 // production unless data loss is explicitly acceptable.
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 // ── Performance ────────────────────────────────────────────
                 // enableMultiInstanceInvalidation is needed if you open the same
                 // DB from multiple processes (e.g. an isolated :accessibility process).
@@ -170,10 +174,29 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         // ── Future migration stub ────────────────────────────────────────────
-        // val MIGRATION_2_3 = object : Migration(2, 3) {
-        //     override fun migrate(db: SupportSQLiteDatabase) {
-        //         db.execSQL("ALTER TABLE app_usage ADD COLUMN new_column TEXT NOT NULL DEFAULT ''")
-        //     }
-        // }
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `daily_behavior_snapshots` (
+                        `date` TEXT NOT NULL,
+                        `totalScreenTimeMinutes` INTEGER NOT NULL,
+                        `totalOpens` INTEGER NOT NULL,
+                        `focusScore` INTEGER NOT NULL,
+                        `productiveRatio` REAL NOT NULL,
+                        `distractionRatio` REAL NOT NULL,
+                        `appSwitches` INTEGER NOT NULL,
+                        `overallRiskScore` REAL NOT NULL,
+                        `doomscrollDetected` INTEGER NOT NULL,
+                        `compulsiveSwitchingDetected` INTEGER NOT NULL,
+                        `lateNightUsageDetected` INTEGER NOT NULL,
+                        `relapseDetected` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`date`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
     }
 }

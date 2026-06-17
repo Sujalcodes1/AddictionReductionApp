@@ -12,12 +12,12 @@ class NudgeWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         AppDataStore.loadFromPrefs(applicationContext)
         val selectedApps = AppDataStore.apps.filter { it.isSelected }
 
         if (selectedApps.isEmpty()) {
-            return Result.success()
+            return@withContext Result.success()
         }
 
         val usageStatsManager = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
@@ -61,6 +61,6 @@ class NudgeWorker(
             )
         }
 
-        return Result.success()
+        return@withContext Result.success()
     }
 }

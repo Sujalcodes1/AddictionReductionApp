@@ -166,7 +166,11 @@ class BehavioralIntelligenceEngine @Inject constructor() {
         // A relapse is flagged when multiple critical signals converge
         val detected = addictionSpike.detected && (productivityDecay.detected || compulsiveSwitching.detected)
         
-        val severity = (addictionSpike.severityScore + productivityDecay.severityScore + compulsiveSwitching.severityScore) / 3f
+        val severity = if (detected) {
+            (addictionSpike.severityScore + productivityDecay.severityScore + compulsiveSwitching.severityScore) / 3f
+        } else {
+            0f
+        }
         val indicator = if (detected) "High-risk behavior convergence" else "Stable"
 
         return RelapseSignal(
@@ -197,15 +201,25 @@ class BehavioralIntelligenceEngine @Inject constructor() {
         val decay = detectProductivityDecay(recentScores, timestamp)
         val relapse = detectRelapse(spike, decay, compulsive, timestamp)
 
-        // ML friendly aggregate score reflecting overall behavioral risk
-        val overallRiskScore = (
-            doomscroll.severityScore +
-            compulsive.severityScore +
-            lateNight.severityScore +
-            spike.severityScore +
-            decay.severityScore +
-            relapse.severityScore
-        ) / 6f
+        val todayFocusDetails = recentScores.lastOrNull()
+        val focusScore = todayFocusDetails?.score ?: 100
+        val distractionRatio = todayFocusDetails?.distractionRatio ?: 0f
+        val productiveRatio = todayFocusDetails?.productiveRatio ?: 1f
+
+        val normalizedAppSwitches = (totalOpens.toFloat() / 100f).coerceIn(0f, 1f)
+
+        val focusRisk = ((100f - focusScore.toFloat()) / 100f).coerceIn(0f, 1f) * 0.25f
+        val distractionRisk = distractionRatio.coerceIn(0f, 1f) * 0.25f
+        val productiveRisk = (1.0f - productiveRatio).coerceIn(0f, 1f) * 0.15f
+        val switchesRisk = normalizedAppSwitches * 0.10f
+        val doomscrollRisk = doomscroll.severityScore * 0.10f
+        val compulsiveRisk = compulsive.severityScore * 0.05f
+        val lateNightRisk = lateNight.severityScore * 0.05f
+        val relapseRisk = relapse.severityScore * 0.05f
+
+        // ML friendly aggregate score reflecting overall behavioral risk using weighted components
+        val overallRiskScore = (focusRisk + distractionRisk + productiveRisk + switchesRisk +
+                doomscrollRisk + compulsiveRisk + lateNightRisk + relapseRisk).coerceIn(0f, 1f)
 
         return BehavioralIntelligenceSnapshot(
             relapse = relapse,

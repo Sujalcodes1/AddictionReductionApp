@@ -46,40 +46,15 @@ fun AnalyticsScreen(
     analyticsViewModel: AnalyticsViewModel = hiltViewModel(),
     dashboardViewModel: DashboardViewModel = hiltViewModel()
 ) {
+    val startCompose = android.os.SystemClock.elapsedRealtime()
     val analyticsState by analyticsViewModel.uiState.collectAsState()
     val dashboardState by dashboardViewModel.uiState.collectAsState()
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // ── Gradient background matching app theme ─────────────────────────
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        DarkBackground,
-                        Color(0xFF040810),
-                        Color(0xFF060E1A),
-                        Color(0xFF040810),
-                        DarkBackground
-                    )
-                )
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(RegainTeal.copy(alpha = 0.05f), Color.Transparent),
-                    radius = size.width * 0.6f
-                ),
-                radius = size.width * 0.6f,
-                center = Offset(size.width * 0.85f, size.height * 0.12f)
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(RegainPurple.copy(alpha = 0.04f), Color.Transparent),
-                    radius = size.width * 0.5f
-                ),
-                radius = size.width * 0.5f,
-                center = Offset(size.width * 0.15f, size.height * 0.75f)
-            )
-        }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DarkBackground)
+    ) {
 
         when {
             analyticsState.isLoading || dashboardState.isLoading -> {
@@ -95,6 +70,10 @@ fun AnalyticsScreen(
                 )
             }
         }
+    }
+    androidx.compose.runtime.SideEffect {
+        val duration = android.os.SystemClock.elapsedRealtime() - startCompose
+        android.util.Log.d("PerfDebug", "AnalyticsScreen composed in $duration ms")
     }
 }
 

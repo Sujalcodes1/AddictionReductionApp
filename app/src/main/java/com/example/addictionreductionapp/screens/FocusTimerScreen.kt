@@ -85,28 +85,9 @@ fun FocusTimerScreen() {
         return
     }
 
-    Box(Modifier.fillMaxSize()) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        DarkBackground,
-                        Color(0xFF03080F),
-                        Color(0xFF081420),
-                        Color(0xFF03080F),
-                        DarkBackground
-                    )
-                )
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(RegainTeal.copy(alpha = 0.05f), Color.Transparent),
-                    radius = size.width * 0.7f
-                ),
-                radius = size.width * 0.7f,
-                center = Offset(size.width * 0.5f, size.height * 0.3f)
-            )
-        }
+    Box(Modifier.fillMaxSize()
+        .background(DarkBackground)
+    ) {
 
         Column(
             Modifier

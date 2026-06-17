@@ -183,47 +183,7 @@ fun LoginScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // ── Layer 1: Deep-Space Radial Gradient Background ──────────
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            // Main radial gradient background
-            drawRect(
-                brush = Brush.radialGradient(
-                    colorStops = arrayOf(
-                        0.0f to SpaceBgCenter,
-                        0.4f to SpaceBgMid,
-                        1.0f to SpaceBgEdge
-                    ),
-                    center = Offset(size.width * 0.5f, size.height * 0.4f),
-                    radius = size.maxDimension * 0.8f
-                )
-            )
-
-            // Blue-teal ambient glow circle behind the card
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        AmbientGlow,
-                        Color.Transparent
-                    ),
-                    radius = size.width * 0.7f
-                ),
-                radius = size.width * 0.7f,
-                center = Offset(size.width * 0.5f, size.height * 0.42f)
-            )
-
-            // Subtle secondary upper glow
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0x0D14B8A6),
-                        Color.Transparent
-                    ),
-                    radius = size.width * 0.5f
-                ),
-                radius = size.width * 0.5f,
-                center = Offset(size.width * 0.3f, size.height * 0.15f)
-            )
-        }
+        Box(modifier = Modifier.fillMaxSize().background(SpaceBgCenter))
 
         // ── Layer 2: Glassmorphism Card ─────────────────────────────
         Column(
@@ -581,31 +541,7 @@ fun RegisterScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // ── Background ──────────────────────────────────────────────
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRect(
-                brush = Brush.radialGradient(
-                    colorStops = arrayOf(
-                        0.0f to SpaceBgCenter,
-                        0.4f to SpaceBgMid,
-                        1.0f to SpaceBgEdge
-                    ),
-                    center = Offset(size.width * 0.5f, size.height * 0.4f),
-                    radius = size.maxDimension * 0.8f
-                )
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        AmbientGlow,
-                        Color.Transparent
-                    ),
-                    radius = size.width * 0.7f
-                ),
-                radius = size.width * 0.7f,
-                center = Offset(size.width * 0.5f, size.height * 0.42f)
-            )
-        }
+        Box(modifier = Modifier.fillMaxSize().background(SpaceBgCenter))
 
         // ── Card ─────────────────────────────────────────────────────
         Column(

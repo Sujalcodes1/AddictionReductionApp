@@ -14,81 +14,50 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.draw.shadow
-import com.example.addictionreductionapp.data.AppDataStore
-import com.google.ai.client.generativeai.GenerativeModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.addictionreductionapp.viewmodel.AICoachViewModel
 import kotlinx.coroutines.launch
 
 @Composable
-fun AICoachScreen() {
-    val coroutineScope = rememberCoroutineScope()
-
-    var userInput by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-
-    val messages = remember {
-        mutableStateListOf(
-            Pair(
-                "arjuna",
-                "Hey ${AppDataStore.userName.value}! 🔥 I'm Arjuna, your personal focus coach. " +
-                "Like the legendary archer who mastered discipline, I'm here to help you build better habits. " +
-                "How can I help you today?"
-            )
-        )
-    }
+fun AICoachScreen(
+    viewModel: AICoachViewModel = hiltViewModel()
+) {
+    val startCompose = android.os.SystemClock.elapsedRealtime()
+    
+    val uiState by viewModel.uiState.collectAsState()
+    
     val listState = rememberLazyListState()
 
     val quickReplies = listOf(
         "I'm struggling", "Give me a tip", "What's my progress?", "I relapsed", "Motivate me"
     )
 
-    // Official Gemini SDK — no manual HTTP, no JSON issues
-    val generativeModel = remember {
-        GenerativeModel(
-            modelName = "gemini-2.0-flash",
-            apiKey = "BuildConfig.GEMINI_API_KEY"
-        )
-    }
-
-    suspend fun sendToGemini(userMessage: String): String {
-        val streak = AppDataStore.streakCount.intValue
-        val sessions = AppDataStore.sessionsCompleted.intValue
-        val topApp = AppDataStore.apps.firstOrNull { it.isSelected }?.name ?: "social media"
-
-        val prompt = "You are Arjuna, a compassionate but firm digital addiction coach inside an app called SmartFocus. " +
-            "The user's name is ${AppDataStore.userName.value}. " +
-            "Current streak: $streak days. Sessions completed: $sessions. Most tracked app: $topApp. " +
-            "Keep responses SHORT (2-3 sentences max), warm, and motivational. " +
-            "Never suggest harmful behavior. If user mentions self-harm, gently recommend professional help.\n\n" +
-            "User: $userMessage"
-
-        return try {
-            val response = generativeModel.generateContent(prompt)
-            response.text ?: "I'm here for you! Keep pushing forward. 💪"
-        } catch (e: Exception) {
-            "I'm having a connection issue right now. But remember — every moment of resistance builds your strength. 💪"
+    // ── Lifecycle probe: fires every time this composable enters/leaves composition
+    DisposableEffect(Unit) {
+        android.util.Log.d("NavDebug", "AICoachScreen ENTERED composition (messages=${uiState.messages.size})")
+        onDispose {
+            android.util.Log.d("NavDebug", "AICoachScreen LEFT composition — messages state preserved in ViewModel")
         }
     }
 
-    fun sendMessage(text: String) {
-        if (text.isBlank()) return
-        val trimmed = text.trim()
-        messages.add(Pair("user", trimmed))
-        userInput = ""
-        isLoading = true
-        coroutineScope.launch {
-            val reply = sendToGemini(trimmed)
-            messages.add(Pair("arjuna", reply))
-            isLoading = false
-            if (messages.isNotEmpty()) {
-                listState.animateScrollToItem(messages.size - 1)
-            }
+    // ── Recomposition probe
+    SideEffect {
+        android.util.Log.d("NavDebug", "AICoachScreen RECOMPOSED (messages.size=${uiState.messages.size})")
+    }
+
+    LaunchedEffect(uiState.messages.size, uiState.isTyping) {
+        val totalItems = uiState.messages.size + if (uiState.isTyping) 1 else 0
+        if (totalItems > 0) {
+            listState.animateScrollToItem(totalItems - 1)
         }
     }
 
@@ -139,7 +108,7 @@ fun AICoachScreen() {
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 12.dp)
         ) {
-            items(messages) { (sender, text) ->
+            items(uiState.messages) { (sender, text) ->
                 val isUser = sender == "user"
                 Row(
                     Modifier.fillMaxWidth(),
@@ -170,7 +139,7 @@ fun AICoachScreen() {
                 }
             }
 
-            if (isLoading) {
+            if (uiState.isTyping) {
                 item {
                     Row {
                         Box(
@@ -192,7 +161,7 @@ fun AICoachScreen() {
         ) {
             items(quickReplies) { reply ->
                 OutlinedButton(
-                    onClick = { sendMessage(reply) },
+                    onClick = { viewModel.sendMessage(reply) },
                     shape = RoundedCornerShape(20.dp),
                     border = BorderStroke(1.dp, Color(0xFF00BFA5).copy(alpha = 0.5f)),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
@@ -210,8 +179,8 @@ fun AICoachScreen() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
-                value = userInput,
-                onValueChange = { userInput = it },
+                value = uiState.currentInput,
+                onValueChange = { viewModel.updateInput(it) },
                 modifier = Modifier.weight(1f),
                 placeholder = { Text("Ask Arjuna...", color = Color.Gray) },
                 colors = OutlinedTextFieldDefaults.colors(
@@ -226,7 +195,7 @@ fun AICoachScreen() {
             )
             Spacer(Modifier.width(8.dp))
             IconButton(
-                onClick = { sendMessage(userInput) },
+                onClick = { viewModel.sendMessage() },
                 modifier = Modifier
                     .size(48.dp)
                     .shadow(
@@ -241,5 +210,9 @@ fun AICoachScreen() {
                 Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.Black)
             }
         }
+    }
+    SideEffect {
+        val duration = android.os.SystemClock.elapsedRealtime() - startCompose
+        android.util.Log.d("PerfDebug", "AICoachScreen composed in $duration ms")
     }
 }

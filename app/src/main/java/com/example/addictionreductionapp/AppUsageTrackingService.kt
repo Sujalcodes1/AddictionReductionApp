@@ -377,7 +377,7 @@ class AppUsageTrackingService : AccessibilityService() {
      * which carry the *dialog's* package name, not the underlying app's.
      * Confirming with UsageStatsManager (which only records genuine Activity
      * lifecycle events) prevents mis-attributing time to these overlays.
-     *
+     *toda
      * @return [candidatePackage] if confirmed, null otherwise.
      */
     private fun confirmForegroundPackage(candidatePackage: String): String? {

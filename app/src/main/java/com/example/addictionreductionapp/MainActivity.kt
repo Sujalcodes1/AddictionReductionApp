@@ -4,6 +4,8 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -101,16 +103,49 @@ import com.example.addictionreductionapp.ui.theme.TextWhite
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
+import com.example.addictionreductionapp.data.repository.SnapshotReconciliationManager
+import javax.inject.Inject
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private var isBlockTriggered = mutableStateOf(false)
     private var blockedAppName = mutableStateOf("")
     private var blockReason = mutableStateOf("")
 
+    @Inject
+    lateinit var reconciliationManager: SnapshotReconciliationManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         scheduleNotifications()
-        AppDataStore.loadFromPrefs(this)
+        
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            AppDataStore.loadFromPrefs(this@MainActivity)
+
+            // One-time snapshot rebuild safety gate
+            val prefs = getSharedPreferences("regain_prefs", android.content.Context.MODE_PRIVATE)
+            val rebuildCompleted = prefs.getBoolean("snapshot_rebuild_completed", false)
+            if (!rebuildCompleted) {
+                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=false — running one-time rebuild.")
+                try {
+                    reconciliationManager.rebuildAllSnapshots(this@MainActivity)
+                    prefs.edit().putBoolean("snapshot_rebuild_completed", true).apply()
+                    android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed flag set to true.")
+                } catch (e: Exception) {
+                    android.util.Log.e("SnapshotRebuild", "Rebuild failed: ${e.message}", e)
+                }
+            } else {
+                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=true — skipping rebuild.")
+            }
+
+            // Perform lightweight startup reconciliation for any new missing dates
+            try {
+                reconciliationManager.reconcileMissingSnapshots()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        
         isBlockTriggered.value = intent?.getBooleanExtra("show_block_screen", false) ?: false
         blockedAppName.value = intent?.getStringExtra("blocked_app_name") ?: ""
         blockReason.value = intent?.getStringExtra("block_reason") ?: ""
@@ -197,6 +232,21 @@ class MainActivity : ComponentActivity() {
         val nudgeRequest = PeriodicWorkRequestBuilder<NudgeWorker>(1, TimeUnit.HOURS)
             .build()
         workManager.enqueueUniquePeriodicWork("hourly_nudge", ExistingPeriodicWorkPolicy.KEEP, nudgeRequest)
+        
+        // Daily Behavior Snapshot Generation (Safety Net): 24h, 11:55 PM
+        val snapshotTarget = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 55)
+            set(Calendar.SECOND, 0)
+        }
+        if (now.after(snapshotTarget)) {
+            snapshotTarget.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        val snapshotDelay = snapshotTarget.timeInMillis - now.timeInMillis
+        val snapshotRequest = PeriodicWorkRequestBuilder<DailySnapshotWorker>(24, TimeUnit.HOURS)
+            .setInitialDelay(snapshotDelay, TimeUnit.MILLISECONDS)
+            .build()
+        workManager.enqueueUniquePeriodicWork("daily_snapshot_generation", ExistingPeriodicWorkPolicy.KEEP, snapshotRequest)
     }
 }
 
@@ -519,69 +569,86 @@ fun BottomNavigationBar(navController: NavHostController) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             items.forEach { (route, label, icon) ->
-                key(route) {
-                    val isSelected = currentRoute == route
-                    val chipWidth by animateDpAsState(
-                        targetValue = if (isSelected) 100.dp else 44.dp,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        ),
-                        label = route
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(chipWidth)
-                            .height(40.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                if (isSelected) Color(0xFF00BFA5).copy(alpha = 0.15f)
-                                else Color.Transparent
-                            )
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() }
-                            ) {
-                                if (currentRoute != route) {
-                                    navController.navigate(route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
+                BottomNavItem(
+                    route = route,
+                    label = label,
+                    icon = icon,
+                    isSelected = currentRoute == route,
+                    onNavigate = {
+                        if (currentRoute != route) {
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
                                 }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = label,
-                                tint = if (isSelected) Color(0xFF00BFA5) else Color.Gray,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            AnimatedVisibility(
-                                visible = isSelected,
-                                enter = fadeIn(tween(200)) + expandHorizontally(tween(250)),
-                                exit = fadeOut(tween(150)) + shrinkHorizontally(tween(200))
-                            ) {
-                                Row {
-                                    Spacer(Modifier.width(5.dp))
-                                    Text(
-                                        text = label,
-                                        color = Color(0xFF00BFA5),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1
-                                    )
-                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
+                            android.util.Log.d("NavDebug", "Navigated to $route, BackStack size: ${navController.currentBackStack.value.size}")
                         }
                     }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun BottomNavItem(
+    route: String,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isSelected: Boolean,
+    onNavigate: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val chipWidth by animateDpAsState(
+        targetValue = if (isSelected) 100.dp else 44.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = route
+    )
+    Box(
+        modifier = Modifier
+            .width(chipWidth)
+            .height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                if (isSelected) Color(0xFF00BFA5).copy(alpha = 0.15f)
+                else Color.Transparent
+            )
+            .clickable(
+                indication = null,
+                interactionSource = interactionSource,
+                onClick = onNavigate
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (isSelected) Color(0xFF00BFA5) else Color.Gray,
+                modifier = Modifier.size(20.dp)
+            )
+            AnimatedVisibility(
+                visible = isSelected,
+                enter = fadeIn(tween(200)) + expandHorizontally(tween(250)),
+                exit = fadeOut(tween(150)) + shrinkHorizontally(tween(200))
+            ) {
+                Row {
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = label,
+                        color = Color(0xFF00BFA5),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
                 }
             }
         }

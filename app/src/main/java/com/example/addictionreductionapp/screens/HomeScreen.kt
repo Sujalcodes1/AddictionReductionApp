@@ -31,50 +31,22 @@ import android.net.Uri
 import kotlinx.coroutines.delay
 import java.util.*
 import java.util.concurrent.TimeUnit
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.addictionreductionapp.viewmodel.HomeViewModel
 
 @Composable
 fun HomeScreen(
     onStartFocus: () -> Unit,
-    onNavigateToApps: () -> Unit
+    onNavigateToApps: () -> Unit,
+    homeViewModel: HomeViewModel = hiltViewModel()
 ) {
+    val startCompose = android.os.SystemClock.elapsedRealtime()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
-    var totalUsedMillis by remember { mutableLongStateOf(0L) }
-    var appsBlockedToday by remember { mutableIntStateOf(0) }
-
-    val usageStatsManager = remember {
-        context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-    }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            val calendar = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            val stats = usageStatsManager.queryAndAggregateUsageStats(
-                calendar.timeInMillis,
-                System.currentTimeMillis()
-            )
-
-            var total = 0L
-            var blockedCount = 0
-            AppDataStore.apps.forEach { app ->
-                val time = stats[app.packageName]?.totalTimeInForeground ?: 0L
-                if (app.isSelected) {
-                    total += time
-                    if (time >= app.limitMinutes * 60 * 1000L) {
-                        blockedCount++
-                    }
-                }
-            }
-            totalUsedMillis = total
-            appsBlockedToday = blockedCount
-            delay(15000)
-        }
-    }
+    
+    val uiState by homeViewModel.uiState.collectAsState()
+    val totalUsedMillis = uiState.totalUsedMillis
+    val appsBlockedToday = uiState.appsBlockedToday
 
     val totalUsedMins = TimeUnit.MILLISECONDS.toMinutes(totalUsedMillis)
     val selectedApps = AppDataStore.apps.filter { it.isSelected }
@@ -100,13 +72,10 @@ fun HomeScreen(
     }
 
     Box(
-        Modifier.fillMaxSize()
-    ) {
-        // Unique gradient background with subtle pattern
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            // Deep dark gradient base
-            drawRect(
-                brush = Brush.verticalGradient(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
                     colors = listOf(
                         DarkBackground,
                         Color(0xFF050A12),
@@ -116,31 +85,7 @@ fun HomeScreen(
                     )
                 )
             )
-            // Subtle teal glow at top-right
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        RegainTeal.copy(alpha = 0.06f),
-                        Color.Transparent
-                    ),
-                    radius = size.width * 0.6f
-                ),
-                radius = size.width * 0.6f,
-                center = Offset(size.width * 0.9f, size.height * 0.08f)
-            )
-            // Subtle purple glow at bottom-left
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        RegainPurple.copy(alpha = 0.04f),
-                        Color.Transparent
-                    ),
-                    radius = size.width * 0.5f
-                ),
-                radius = size.width * 0.5f,
-                center = Offset(size.width * 0.1f, size.height * 0.85f)
-            )
-        }
+    ) {
 
         val hasUsage = PermissionUtils.hasUsageAccess(context)
         val hasOverlay = PermissionUtils.hasOverlayPermission(context)
@@ -569,4 +514,8 @@ fun HomeScreen(
         Spacer(Modifier.height(24.dp))
     }
     } // Close Box
+    androidx.compose.runtime.SideEffect {
+        val duration = android.os.SystemClock.elapsedRealtime() - startCompose
+        android.util.Log.d("PerfDebug", "HomeScreen composed in $duration ms")
+    }
 }

@@ -11,7 +11,7 @@ class ReportWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val reportType = inputData.getString("report_type") ?: "daily"
         
         // Load data to ensure apps list and streak count are populated
@@ -19,7 +19,7 @@ class ReportWorker(
         val selectedApps = AppDataStore.apps.filter { it.isSelected }
 
         if (selectedApps.isEmpty()) {
-            return Result.success()
+            return@withContext androidx.work.ListenableWorker.Result.success()
         }
 
         val usageStatsManager = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
@@ -73,6 +73,6 @@ class ReportWorker(
             body = message
         )
 
-        return Result.success()
+        return@withContext Result.success()
     }
 }
