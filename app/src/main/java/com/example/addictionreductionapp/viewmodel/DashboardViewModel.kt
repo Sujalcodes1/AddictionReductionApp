@@ -5,16 +5,20 @@ import androidx.lifecycle.viewModelScope
 import com.example.addictionreductionapp.data.analytics.BehavioralIntelligenceEngine
 import com.example.addictionreductionapp.data.analytics.FocusScoreEngine
 import com.example.addictionreductionapp.data.analytics.StreakEngine
+import com.example.addictionreductionapp.data.models.AddictionProfile
 import com.example.addictionreductionapp.data.models.FocusScoreDetails
+import com.example.addictionreductionapp.data.repository.AddictionIntelligenceRepository
 import com.example.addictionreductionapp.data.repository.AnalyticsRepository
 import com.example.addictionreductionapp.data.repository.DailyBehaviorSnapshotRepository
 import com.example.addictionreductionapp.data.local.entities.DailyBehaviorSnapshotEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -24,6 +28,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
+    private val addictionIntelligenceRepository: AddictionIntelligenceRepository,
     private val analyticsRepository: AnalyticsRepository,
     private val focusScoreEngine: FocusScoreEngine,
     private val streakEngine: StreakEngine,
@@ -34,9 +39,30 @@ class DashboardViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DashboardUiState(isLoading = false))
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
+    // ── Addiction Intelligence Profile ────────────────────────────────────────
+    // Starts as null; first emission populates it after one combine cycle.
+    private val _addictionProfile = MutableStateFlow<AddictionProfile?>(null)
+    val addictionProfile: StateFlow<AddictionProfile?> = _addictionProfile.asStateFlow()
+
     init {
         android.util.Log.d("NavDebug", "DashboardViewModel INITIALIZED (hashCode=${hashCode()})")
         loadDashboardData()
+        loadAddictionProfile()
+    }
+
+    private fun loadAddictionProfile() {
+        viewModelScope.launch {
+            addictionIntelligenceRepository.generateAddictionProfile()
+                .flowOn(Dispatchers.Default)  // heavy combine work off Main
+                .catch { e ->
+                    // Log but do not crash the dashboard if one upstream flow errors.
+                    android.util.Log.e("DashboardViewModel", "addictionProfile error", e)
+                    _addictionProfile.value = null
+                }
+                .collect { profile ->
+                    _addictionProfile.value = profile
+                }
+        }
     }
 
     private fun loadDashboardData() {

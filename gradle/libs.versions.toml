@@ -38,6 +38,22 @@ coroutines = "1.8.1"
 # ── Generative AI ─────────────────────────────────────────────────────────────
 generativeai = "0.9.0"
 
+# ── Supabase ──────────────────────────────────────────────────────────────────
+# 3.1.4: latest stable compatible with Kotlin 2.0.21 (BOM 3.2.6 requires Ktor 3.3.1 / Kotlin 2.2.x)
+supabase = "3.1.4"
+
+# ── Ktor ──────────────────────────────────────────────────────────────────────
+# Supabase-kt 3.1.4 uses Ktor 3.1.1 (compiled with Kotlin 2.0.x — matches project)
+ktor = "3.1.1"
+
+# ── Kotlinx Serialization ─────────────────────────────────────────────────────
+# Required by Supabase-kt for JSON encoding/decoding
+kotlinxSerializationJson = "1.7.3"
+
+# ── Jetpack Security ──────────────────────────────────────────────────────────
+# For EncryptedSharedPreferences — auth token encrypted at rest
+securityCrypto = "1.1.0-alpha06"
+
 # ── Testing ───────────────────────────────────────────────────────────────────
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -83,6 +99,24 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 # ── Generative AI ─────────────────────────────────────────────────────────────
 generativeai = { group = "com.google.ai.client.generativeai", name = "generativeai", version.ref = "generativeai" }
 
+# ── Supabase ──────────────────────────────────────────────────────────────────
+# BOM: import without version; individual modules inherit from BOM
+supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
+# auth-kt: GoTrue v2 / Supabase Auth (replaces old gotrue-kt artifact name)
+supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
+# postgrest-kt: for user_profiles upsert on registration
+supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
+
+# ── Ktor ──────────────────────────────────────────────────────────────────────
+# OkHttp engine recommended for Android (more stable than CIO on Android)
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+
+# ── Kotlinx Serialization ─────────────────────────────────────────────────────
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+
+# ── Jetpack Security ──────────────────────────────────────────────────────────
+security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+
 # ── Testing ───────────────────────────────────────────────────────────────────
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -95,3 +129,5 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+# Required by Supabase-kt for @Serializable support; shares kotlin version
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

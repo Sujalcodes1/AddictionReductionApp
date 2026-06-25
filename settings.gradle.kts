@@ -22,10 +22,8 @@ dependencyResolutionManagement {
 rootProject.name = "AddictionReductionApp"
 include(":app")
 
-/*
-// Redirect build directory to D: drive to avoid disk space, path length, and OneDrive sync issues
+// Redirect build directory outside of OneDrive to fix AccessDeniedException and file locking issues
 gradle.beforeProject {
     val buildDirName = if (project == rootProject) "root" else project.name
-    layout.buildDirectory.set(file("D:/gradle_builds/AddictionReductionApp/$buildDirName"))
+    layout.buildDirectory.set(file("C:/gradle_builds/AddictionReductionApp/$buildDirName"))
 }
-*/

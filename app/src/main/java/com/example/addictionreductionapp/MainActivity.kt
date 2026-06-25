@@ -111,6 +111,7 @@ class MainActivity : ComponentActivity() {
     private var isBlockTriggered = mutableStateOf(false)
     private var blockedAppName = mutableStateOf("")
     private var blockReason = mutableStateOf("")
+    private var deepLinkUri = mutableStateOf<String?>(null)
 
     @Inject
     lateinit var reconciliationManager: SnapshotReconciliationManager
@@ -119,8 +120,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         scheduleNotifications()
         
+        if (intent?.data?.scheme == "smartfocus" && intent?.data?.host == "login-callback") {
+            deepLinkUri.value = intent?.dataString
+        }
+        
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             AppDataStore.loadFromPrefs(this@MainActivity)
+            val sessionManager = com.example.addictionreductionapp.utils.SessionManager(this@MainActivity)
+            if (sessionManager.getSession() != null) {
+                AppDataStore.isLoggedIn.value = true
+            }
 
             // One-time snapshot rebuild safety gate
             val prefs = getSharedPreferences("regain_prefs", android.content.Context.MODE_PRIVATE)
@@ -164,6 +173,8 @@ class MainActivity : ComponentActivity() {
                         isBlockTriggered = isBlockTriggered.value,
                         blockedAppName = blockedAppName.value,
                         blockReason = blockReason.value,
+                        deepLinkUri = deepLinkUri.value,
+                        onDeepLinkHandled = { deepLinkUri.value = null },
                         onBlockShown = {
                             isBlockTriggered.value = false
                             blockedAppName.value = ""
@@ -177,6 +188,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.data?.scheme == "smartfocus" && intent.data?.host == "login-callback") {
+            deepLinkUri.value = intent.dataString
+        }
         if (intent.getBooleanExtra("show_block_screen", false)) {
             isBlockTriggered.value = true
             blockedAppName.value = intent.getStringExtra("blocked_app_name") ?: ""
@@ -255,8 +269,13 @@ fun AppRoot(
     isBlockTriggered: Boolean,
     blockedAppName: String,
     blockReason: String,
+    deepLinkUri: String?,
+    onDeepLinkHandled: () -> Unit,
     onBlockShown: () -> Unit
 ) {
+    val context = LocalContext.current
+    val authViewModel: com.example.addictionreductionapp.viewmodel.AuthViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = remember(navBackStackEntry) { navBackStackEntry?.destination?.route }
@@ -276,6 +295,22 @@ fun AppRoot(
                 popUpTo(navController.graph.startDestinationId)
             }
             onBlockShown()
+        }
+    }
+
+    LaunchedEffect(deepLinkUri) {
+        if (deepLinkUri != null) {
+            authViewModel.handleDeepLink(deepLinkUri) { result ->
+                if (result is com.example.addictionreductionapp.utils.AuthResult.Success) {
+                    AppDataStore.isLoggedIn.value = true
+                    AppDataStore.saveToPrefs(context)
+                    // If we're already on login/register, navigate to home
+                    navController.navigate("home") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+            onDeepLinkHandled()
         }
     }
 

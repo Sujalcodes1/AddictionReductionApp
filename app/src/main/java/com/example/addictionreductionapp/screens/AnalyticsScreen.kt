@@ -8,6 +8,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingFlat
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,11 +30,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.addictionreductionapp.data.models.AddictionLevel
+import com.example.addictionreductionapp.data.models.AddictionProfile
 import com.example.addictionreductionapp.data.models.AppUsageSummary
 import com.example.addictionreductionapp.data.models.BehavioralIntelligenceSnapshot
 import com.example.addictionreductionapp.data.models.CategoryAnalytics
 import com.example.addictionreductionapp.data.models.FocusScoreDetails
 import com.example.addictionreductionapp.data.models.HourlyUsagePoint
+import com.example.addictionreductionapp.data.models.RelapseRiskLevel
+import com.example.addictionreductionapp.data.models.RecoveryTrend
 import com.example.addictionreductionapp.data.models.StreakAnalysis
 import com.example.addictionreductionapp.ui.theme.*
 import com.example.addictionreductionapp.viewmodel.AnalyticsUiState
@@ -49,6 +58,10 @@ fun AnalyticsScreen(
     val startCompose = android.os.SystemClock.elapsedRealtime()
     val analyticsState by analyticsViewModel.uiState.collectAsState()
     val dashboardState by dashboardViewModel.uiState.collectAsState()
+    // Phase 7.5: observe the AddictionProfile StateFlow with lifecycle awareness.
+    // collectAsStateWithLifecycle is available via lifecycle-viewmodel-compose:2.8.7
+    // (confirmed in build.gradle.kts; transitively includes lifecycle-runtime-compose).
+    val addictionProfile by dashboardViewModel.addictionProfile.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -66,7 +79,8 @@ fun AnalyticsScreen(
             else -> {
                 AnalyticsDashboardContent(
                     analytics = analyticsState,
-                    dashboard = dashboardState
+                    dashboard = dashboardState,
+                    addictionProfile = addictionProfile
                 )
             }
         }
@@ -83,7 +97,8 @@ fun AnalyticsScreen(
 @Composable
 private fun AnalyticsDashboardContent(
     analytics: AnalyticsUiState,
-    dashboard: DashboardUiState
+    dashboard: DashboardUiState,
+    addictionProfile: AddictionProfile?
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -155,6 +170,14 @@ private fun AnalyticsDashboardContent(
                 focusScore = analytics.focusScoreDetails,
                 streak = analytics.streakAnalysis
             )
+        }
+
+        // ── 6. Addiction Intelligence ──────────────────────────────────────
+        item {
+            SectionLabel(title = "Addiction Intelligence", icon = Icons.Default.MonitorHeart)
+        }
+        item {
+            AddictionIntelligenceSection(profile = addictionProfile)
         }
 
         // Bottom padding for nav bar
@@ -1364,6 +1387,448 @@ private fun MiniStat(label: String, value: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Text(label, color = TextGray, fontSize = 10.sp)
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 6 — Addiction Intelligence
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Top-level section composable for the Addiction Intelligence cards.
+ * Handles the null / loading state per-section so the rest of the dashboard
+ * is never blocked while the first emission is pending.
+ */
+@Composable
+private fun AddictionIntelligenceSection(profile: AddictionProfile?) {
+    if (profile == null) {
+        // Loading state — matches EmptyDataCardFull pattern used in Section 5.
+        AddictionIntelligencePlaceholder()
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AddictionScoreCard(profile = profile)
+        RelapseStatusCard(profile = profile)
+        UsageProfileCard(profile = profile)
+        WarningsCard(profile = profile)
+    }
+}
+
+/** Null/loading placeholder — mirrors EmptyDataCardFull used in Section 5. */
+@Composable
+private fun AddictionIntelligencePlaceholder() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                CircularProgressIndicator(
+                    color = RegainTeal,
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "Analyzing behavior\u2026",
+                    color = TextGray.copy(alpha = 0.6f),
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: maps AddictionLevel / RelapseRiskLevel to the existing color tokens
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Maps [AddictionLevel] to an existing theme color token.
+ * LOW → SuccessGreen, MEDIUM → WarningYellow, HIGH → RegainOrange, CRITICAL → ErrorRed.
+ * Reuses the same tokens already used in FocusScoreCard and RiskScoreCard.
+ */
+private fun addictionLevelColor(level: AddictionLevel): Color = when (level) {
+    AddictionLevel.LOW      -> SuccessGreen
+    AddictionLevel.MEDIUM   -> WarningYellow
+    AddictionLevel.HIGH     -> RegainOrange
+    AddictionLevel.CRITICAL -> ErrorRed
+}
+
+/**
+ * Maps [RelapseRiskLevel] to an existing theme color token.
+ * Mirrors addictionLevelColor — same 4-tier severity scale.
+ */
+private fun relapseRiskColor(level: RelapseRiskLevel): Color = when (level) {
+    RelapseRiskLevel.LOW      -> SuccessGreen
+    RelapseRiskLevel.MEDIUM   -> WarningYellow
+    RelapseRiskLevel.HIGH     -> RegainOrange
+    RelapseRiskLevel.CRITICAL -> ErrorRed
+}
+
+/**
+ * Maps [RecoveryTrend] to an existing theme color token.
+ * IMPROVING → SuccessGreen, STABLE → TextGrayLight, WORSENING → ErrorRed,
+ * UNKNOWN → TextGray (muted, shown explicitly — not hidden).
+ */
+private fun recoveryTrendColor(trend: RecoveryTrend): Color = when (trend) {
+    RecoveryTrend.IMPROVING -> SuccessGreen
+    RecoveryTrend.STABLE    -> TextGrayLight
+    RecoveryTrend.WORSENING -> ErrorRed
+    RecoveryTrend.UNKNOWN   -> TextGray
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reusable level chip — pairs text label with color so color is never the
+// only signal (accessibility requirement).
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun LevelChip(label: String, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.18f),
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Text(
+            text = label,
+            color = color,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARD 1 — Addiction Score
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun AddictionScoreCard(profile: AddictionProfile) {
+    val levelColor = addictionLevelColor(profile.addictionLevel)
+    val levelLabel = profile.addictionLevel.name  // e.g. "LOW", "HIGH"
+    val animatedScore by animateFloatAsState(
+        targetValue = profile.addictionScore.toFloat(),
+        animationSpec = tween(durationMillis = 1200, easing = EaseOutCubic),
+        label = "addictionScore"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = levelColor.copy(alpha = 0.06f)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, levelColor.copy(alpha = 0.35f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        color = levelColor.copy(alpha = 0.15f),
+                        shape = CircleShape,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.MonitorHeart,
+                                // contentDescription = null: decorative; the heading text conveys meaning
+                                contentDescription = null,
+                                tint = levelColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Addiction Score",
+                        color = TextWhite,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                LevelChip(label = levelLabel, color = levelColor)
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${profile.addictionScore}",
+                    color = levelColor,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = " / 100",
+                    color = TextGray,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { animatedScore / 100f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(CircleShape),
+                color = levelColor,
+                trackColor = DarkCardLight,
+                strokeCap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARD 2 — Relapse Status (risk level + recovery trend)
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun RelapseStatusCard(profile: AddictionProfile) {
+    val riskColor  = relapseRiskColor(profile.relapseRiskLevel)
+    val trendColor = recoveryTrendColor(profile.recoveryTrend)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Relapse Status",
+                color = TextWhite,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(12.dp))
+
+            // Relapse Risk row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Shield,
+                        // decorative — text label "Relapse Risk" already conveys meaning
+                        contentDescription = null,
+                        tint = riskColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Relapse Risk", color = TextGray, fontSize = 13.sp)
+                }
+                LevelChip(
+                    // relapseRiskLevel.toLabel() provides accessible text ("Low Risk", etc.)
+                    label = profile.relapseRiskLevel.name,
+                    color = riskColor
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = DarkCardLight, thickness = 1.dp)
+            Spacer(Modifier.height(10.dp))
+
+            // Recovery Trend row — UNKNOWN is shown explicitly, never hidden
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        when (profile.recoveryTrend) {
+                            RecoveryTrend.IMPROVING -> Icons.AutoMirrored.Filled.TrendingUp
+                            RecoveryTrend.WORSENING -> Icons.AutoMirrored.Filled.TrendingDown
+                            RecoveryTrend.STABLE    -> Icons.AutoMirrored.Filled.TrendingFlat
+                            RecoveryTrend.UNKNOWN   -> Icons.AutoMirrored.Filled.HelpOutline
+                        },
+                        // decorative — label text provides the meaning
+                        contentDescription = null,
+                        tint = trendColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Recovery Trend", color = TextGray, fontSize = 13.sp)
+                }
+                LevelChip(
+                    label = profile.recoveryTrend.name,  // e.g. "IMPROVING", "UNKNOWN"
+                    color = trendColor
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARD 3 — Usage Profile (most-used app, category, focus score)
+// Null-safe: mostUsedApp / mostUsedCategory are nullable per AddictionProfile.
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun UsageProfileCard(profile: AddictionProfile) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Usage Profile",
+                color = TextWhite,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(12.dp))
+
+            // Most-used app — null-safe fallback
+            UsageProfileRow(
+                icon = Icons.Default.Apps,
+                label = "Most Used App",
+                value = profile.mostUsedApp ?: "Not enough data yet",
+                valueColor = if (profile.mostUsedApp != null) TextWhite else TextGray
+            )
+            Spacer(Modifier.height(8.dp))
+
+            // Most-used category — null-safe fallback
+            UsageProfileRow(
+                icon = Icons.Default.Category,
+                label = "Most Used Category",
+                value = profile.mostUsedCategory?.replaceFirstChar { it.uppercase() }
+                    ?: "Not enough data yet",
+                valueColor = if (profile.mostUsedCategory != null) TextWhite else TextGray
+            )
+            Spacer(Modifier.height(8.dp))
+
+            // Focus score — always present (Int, non-null)
+            UsageProfileRow(
+                icon = Icons.Default.Insights,
+                label = "Focus Score",
+                value = "${profile.focusScore} / 100",
+                valueColor = when {
+                    profile.focusScore >= 75 -> SuccessGreen
+                    profile.focusScore >= 50 -> RegainAmber
+                    else                     -> ErrorRed
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun UsageProfileRow(icon: ImageVector, label: String, value: String, valueColor: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,   // label text conveys meaning
+            tint = RegainTeal,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = label,
+            color = TextGray,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            color = valueColor,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARD 4 — Warnings
+// Renders whatever strings AddictionProfile.warnings contains at runtime.
+// No warning strings are hardcoded in this UI layer.
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun WarningsCard(profile: AddictionProfile) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (profile.warnings.isNotEmpty())
+                ErrorRed.copy(alpha = 0.08f)
+            else
+                DarkCard
+        ),
+        shape = RoundedCornerShape(16.dp),
+        border = if (profile.warnings.isNotEmpty())
+            androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.35f))
+        else null
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Addiction Warnings",
+                color = TextWhite,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(10.dp))
+
+            if (profile.warnings.isEmpty()) {
+                // Empty state — always shown when no risks detected (per spec Step 4)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,   // decorative; text conveys meaning
+                        tint = SuccessGreen,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "No addiction risks detected.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp
+                    )
+                }
+            } else {
+                // One row per warning — text is never hardcoded; rendered from runtime data
+                profile.warnings.forEach { warning ->
+                    Row(
+                        modifier = Modifier.padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,   // decorative; warning text follows
+                            tint = ErrorRed,
+                            modifier = Modifier
+                                .size(15.dp)
+                                .padding(top = 1.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = warning,
+                            color = TextGrayLight,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -1,27 +1,55 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     // Required in Kotlin 2.x — enables the Compose compiler Gradle plugin.
     // This replaces the old composeOptions { kotlinCompilerExtensionVersion = "..." } block.
     alias(libs.plugins.kotlin.compose)
+    // Required by Supabase-kt — enables @Serializable annotation processing.
+    alias(libs.plugins.kotlin.serialization)
     // KSP for Room + Hilt annotation processing (KAPT is not supported in Kotlin 2.x)
     alias(libs.plugins.ksp)
     // Hilt DI — was incorrectly commented out; @HiltAndroidApp requires this plugin
     alias(libs.plugins.hilt.android)
 }
 
+// ── Credentials: read SUPABASE_URL and SUPABASE_ANON_KEY from local.properties ──────────
+// NEVER hardcode credentials. Keys are injected into BuildConfig at compile time.
+// local.properties is in .gitignore and never committed to version control.
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
 android {
     namespace = "com.example.addictionreductionapp"
-    compileSdk = 35
+    compileSdk = 36  // Raised from 35: androidx.browser:1.9.0 (transitive from supabase auth-kt) requires 36.
+                     // gradle.properties already has android.suppressUnsupportedCompileSdk=36 for AGP 8.7.3 compat.
 
     defaultConfig {
         applicationId = "com.example.addictionreductionapp"
-        minSdk = 24
+        minSdk = 26  // Raised from 24: Supabase-kt 3.x native requirement; eliminates desugaring overhead
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // ── Supabase BuildConfig fields ────────────────────────────────────────────
+        // Read from local.properties — never from hardcoded string literals.
+        // Usage in Kotlin: BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY
+        buildConfigField(
+            "String",
+            "SUPABASE_URL",
+            "\"${localProperties["SUPABASE_URL"] ?: ""}\""
+        )
+        buildConfigField(
+            "String",
+            "SUPABASE_ANON_KEY",
+            "\"${localProperties["SUPABASE_ANON_KEY"] ?: ""}\""
+        )
     }
 
     buildTypes {
@@ -45,6 +73,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Enables BuildConfig generation so SUPABASE_URL and SUPABASE_ANON_KEY
+        // can be read from local.properties at compile time without hardcoding.
+        buildConfig = true
     }
     // NOTE: Do NOT add composeOptions { kotlinCompilerExtensionVersion = "..." } here.
     // With Kotlin 2.x + kotlin.plugin.compose, the compiler version is managed
@@ -60,6 +91,16 @@ android {
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.incremental", "true")
+}
+
+// ── Dependency resolution overrides ──────────────────────────────────────────
+// androidx.browser:1.9.0 (transitive from supabase auth-kt) requires AGP 8.9.1.
+// This project uses AGP 8.7.3 and only uses email/password auth — no OAuth browser
+// flows. Forcing 1.8.0 satisfies Supabase's runtime needs with the current AGP.
+configurations.all {
+    resolutionStrategy {
+        force("androidx.browser:browser:1.8.0")
+    }
 }
 
 dependencies {
@@ -110,6 +151,21 @@ dependencies {
 
     // ── Gson (used by Room TypeConverters for List<String> / List<Int>) ────────
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // ── Supabase Auth + Postgrest (BOM manages versions — no explicit version needed) ──
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)      // auth-kt: Supabase GoTrue v2 / Auth
+    implementation(libs.supabase.postgrest) // postgrest-kt: user_profiles upsert
+
+    // ── Ktor OkHttp engine (required at runtime by Supabase-kt on Android) ────────
+    implementation(libs.ktor.client.okhttp)
+
+    // ── Kotlinx Serialization JSON (required by Supabase-kt for data encoding) ────
+    implementation(libs.kotlinx.serialization.json)
+
+    // ── Jetpack Security: EncryptedSharedPreferences for auth token storage ───────
+    // Session tokens are security-sensitive — must never live in plaintext prefs.
+    implementation(libs.security.crypto)
 
     // ── Testing ───────────────────────────────────────────────────────────────
     testImplementation(libs.junit)

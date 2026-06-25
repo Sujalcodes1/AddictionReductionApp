@@ -37,6 +37,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,10 +49,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -60,9 +69,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.addictionreductionapp.`data`.AppDataStore
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.DarkBackground
 import com.example.addictionreductionapp.ui.theme.DarkCard
 import com.example.addictionreductionapp.ui.theme.DarkSurface
@@ -70,16 +82,9 @@ import com.example.addictionreductionapp.ui.theme.RegainPurple
 import com.example.addictionreductionapp.ui.theme.RegainTeal
 import com.example.addictionreductionapp.ui.theme.TextGray
 import com.example.addictionreductionapp.ui.theme.TextWhite
-import kotlinx.coroutines.delay
+import com.example.addictionreductionapp.utils.AuthResult
+import com.example.addictionreductionapp.viewmodel.AuthViewModel
 import kotlinx.coroutines.launch
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.ClipOp
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.unit.Dp
 
 // ── Custom Glass Glow Shadow Modifier ──────────────────────────────
 // Draws a beautiful, realistic glowing layout shadow outside the box
@@ -92,9 +97,8 @@ fun Modifier.glassGlow(
     glowAlpha: Float = 0.5f,
     offsetY: Dp = 0.dp
 ): Modifier = this.drawBehind {
-    val density = this
     val glowColor = color.copy(alpha = glowAlpha)
-    
+
     // Path matching the exact bounds and rounded corners of the box
     val innerPath = Path().apply {
         addRoundRect(
@@ -104,7 +108,7 @@ fun Modifier.glassGlow(
             )
         )
     }
-    
+
     // Clip out the inner box area using ClipOp.Difference so only the outer glow is drawn
     clipPath(innerPath, clipOp = ClipOp.Difference) {
         val paint = Paint().asFrameworkPaint().apply {
@@ -116,7 +120,7 @@ fun Modifier.glassGlow(
                 glowColor.toArgb()
             )
         }
-        
+
         drawIntoCanvas { canvas ->
             canvas.drawRoundRect(
                 left = 0f,
@@ -125,7 +129,7 @@ fun Modifier.glassGlow(
                 bottom = size.height,
                 radiusX = borderRadius.toPx(),
                 radiusY = borderRadius.toPx(),
-                paint = androidx.compose.ui.graphics.Paint().apply {
+                paint = Paint().apply {
                     asFrameworkPaint().set(paint)
                 }
             )
@@ -157,6 +161,12 @@ private val CtaGradientA    = Color(0xFF0D9488)
 private val CtaGradientB    = Color(0xFF06B6D4)
 private val FocusGlowTeal   = Color(0x2614B8A6)     // rgba(20,184,166,0.15)
 private val FocusBorderTeal = Color(0x8014B8A6)      // rgba(20,184,166,0.50)
+private val ValidationError = Color(0xFFFF6B6B)      // Soft red for inline validation messages
+
+// ── Email format validator ─────────────────────────────────────────────────────
+private fun isValidEmail(email: String): Boolean {
+    return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+}
 
 // ──────────────────────────────────────────────────────────────────────
 //  LOGIN SCREEN — Deep-Space Glassmorphism
@@ -165,15 +175,24 @@ private val FocusBorderTeal = Color(0x8014B8A6)      // rgba(20,184,166,0.50)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
+    authViewModel: AuthViewModel = hiltViewModel(),
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
+
+    // Per-field validation error messages (null = no error shown yet)
+    var emailError by remember { mutableStateOf<String?>(null) }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
+    val isLoading = authState is com.example.addictionreductionapp.utils.AuthState.Loading
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Focus tracking for glow effect
     val emailInteractionSource = remember { MutableInteractionSource() }
@@ -276,7 +295,11 @@ fun LoginScreen(
                     // ── Email Input Field ─────────────────────────────
                     OutlinedTextField(
                         value = email,
-                        onValueChange = { email = it },
+                        onValueChange = {
+                            email = it
+                            // Clear error as user types
+                            if (emailError != null) emailError = null
+                        },
                         placeholder = {
                             Text(
                                 "Work Email",
@@ -288,26 +311,30 @@ fun LoginScreen(
                             Icon(
                                 Icons.Default.Email,
                                 contentDescription = "Email",
-                                tint = IconWhite04,
+                                tint = if (emailError != null) ValidationError else IconWhite04,
                                 modifier = Modifier.size(20.dp)
                             )
                         },
+                        isError = emailError != null,
                         interactionSource = emailInteractionSource,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = FocusBorderTeal,
-                            unfocusedBorderColor = GlassInputBorder,
+                            focusedBorderColor = if (emailError != null) ValidationError else FocusBorderTeal,
+                            unfocusedBorderColor = if (emailError != null) ValidationError.copy(alpha = 0.6f) else GlassInputBorder,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                             focusedContainerColor = GlassInput005,
                             unfocusedContainerColor = GlassInput005,
                             cursorColor = GradientTealA,
-                            focusedLeadingIconColor = GradientTealA,
-                            unfocusedLeadingIconColor = IconWhite04
+                            focusedLeadingIconColor = if (emailError != null) ValidationError else GradientTealA,
+                            unfocusedLeadingIconColor = if (emailError != null) ValidationError else IconWhite04,
+                            errorBorderColor = ValidationError,
+                            errorLeadingIconColor = ValidationError,
+                            errorTextColor = Color.White
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(
-                                if (isEmailFocused) {
+                                if (isEmailFocused && emailError == null) {
                                     Modifier.glassGlow(
                                         color = GradientTealA,
                                         borderRadius = 14.dp,
@@ -321,13 +348,27 @@ fun LoginScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp)
                     )
+                    // Inline email error
+                    if (emailError != null) {
+                        Text(
+                            text = emailError!!,
+                            color = ValidationError,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, top = 4.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // ── Password Input Field ─────────────────────────
                     OutlinedTextField(
                         value = password,
-                        onValueChange = { password = it },
+                        onValueChange = {
+                            password = it
+                            if (passwordError != null) passwordError = null
+                        },
                         placeholder = {
                             Text(
                                 "Password",
@@ -339,7 +380,7 @@ fun LoginScreen(
                             Icon(
                                 Icons.Default.Lock,
                                 contentDescription = "Password",
-                                tint = IconWhite04,
+                                tint = if (passwordError != null) ValidationError else IconWhite04,
                                 modifier = Modifier.size(20.dp)
                             )
                         },
@@ -357,6 +398,7 @@ fun LoginScreen(
                                 )
                             }
                         },
+                        isError = passwordError != null,
                         interactionSource = passwordInteractionSource,
                         visualTransformation = if (passwordVisible)
                             VisualTransformation.None
@@ -364,22 +406,25 @@ fun LoginScreen(
                             PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = FocusBorderTeal,
-                            unfocusedBorderColor = GlassInputBorder,
+                            focusedBorderColor = if (passwordError != null) ValidationError else FocusBorderTeal,
+                            unfocusedBorderColor = if (passwordError != null) ValidationError.copy(alpha = 0.6f) else GlassInputBorder,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                             focusedContainerColor = GlassInput005,
                             unfocusedContainerColor = GlassInput005,
                             cursorColor = GradientTealA,
-                            focusedLeadingIconColor = GradientTealA,
-                            unfocusedLeadingIconColor = IconWhite04,
+                            focusedLeadingIconColor = if (passwordError != null) ValidationError else GradientTealA,
+                            unfocusedLeadingIconColor = if (passwordError != null) ValidationError else IconWhite04,
                             focusedTrailingIconColor = GradientTealA,
-                            unfocusedTrailingIconColor = IconWhite04
+                            unfocusedTrailingIconColor = IconWhite04,
+                            errorBorderColor = ValidationError,
+                            errorLeadingIconColor = ValidationError,
+                            errorTextColor = Color.White
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(
-                                if (isPasswordFocused) {
+                                if (isPasswordFocused && passwordError == null) {
                                     Modifier.glassGlow(
                                         color = GradientTealA,
                                         borderRadius = 14.dp,
@@ -393,26 +438,74 @@ fun LoginScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp)
                     )
+                    // Inline password error
+                    if (passwordError != null) {
+                        Text(
+                            text = passwordError!!,
+                            color = ValidationError,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, top = 4.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(32.dp))
 
                     // ── CTA Gradient Pill Button ─────────────────────
                     Button(
                         onClick = {
-                            if (email.isNotBlank() && password.isNotBlank()) {
-                                isLoading = true
-                                scope.launch {
-                                    delay(900) // Simulate network call
-                                    AppDataStore.isLoggedIn.value = true
-                                    AppDataStore.userName.value =
-                                        email.substringBefore("@")
-                                            .replaceFirstChar { it.uppercase() }
-                                    AppDataStore.saveToPrefs(context)
-                                    isLoading = false
-                                    onLoginSuccess()
+                            // ── Step 1: Local validation — NEVER call Supabase if invalid ──
+                            var valid = true
+
+                            if (email.isBlank()) {
+                                emailError = "Email is required"
+                                valid = false
+                            } else if (!isValidEmail(email)) {
+                                emailError = "Enter a valid email address"
+                                valid = false
+                            }
+
+                            if (password.isBlank()) {
+                                passwordError = "Password is required"
+                                valid = false
+                            } else if (password.length < 6) {
+                                passwordError = "Password must contain at least 6 characters"
+                                valid = false
+                            }
+
+                            if (!valid) return@Button
+
+                            // ── Step 2: Call real Supabase auth ──────────────────────────
+                            authViewModel.login(email, password) { result ->
+                                when (result) {
+                                    is AuthResult.Success -> {
+                                        scope.launch {
+                                            // Sync AppDataStore for downstream screens
+                                            AppDataStore.isLoggedIn.value = true
+                                            AppDataStore.userName.value =
+                                                email.substringBefore("@")
+                                                    .replaceFirstChar { it.uppercase() }
+                                            AppDataStore.saveToPrefs(context)
+                                            onLoginSuccess()
+                                        }
+                                    }
+                                    is AuthResult.EmailConfirmationRequired -> {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                "Please verify your email address before logging in."
+                                            )
+                                        }
+                                    }
+                                    is AuthResult.Failure -> {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(result.message)
+                                        }
+                                    }
                                 }
                             }
                         },
+                        enabled = !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp)
@@ -425,7 +518,8 @@ fun LoginScreen(
                             ),
                         shape = RoundedCornerShape(50.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Transparent
+                            containerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent
                         ),
                         elevation = ButtonDefaults.buttonElevation(
                             defaultElevation = 0.dp,
@@ -440,7 +534,10 @@ fun LoginScreen(
                                 .fillMaxSize()
                                 .background(
                                     Brush.linearGradient(
-                                        colors = listOf(CtaGradientA, CtaGradientB),
+                                        colors = listOf(
+                                            if (isLoading) CtaGradientA.copy(alpha = 0.6f) else CtaGradientA,
+                                            if (isLoading) CtaGradientB.copy(alpha = 0.6f) else CtaGradientB
+                                        ),
                                         start = Offset.Zero,
                                         end = Offset.Infinite
                                     ),
@@ -448,13 +545,31 @@ fun LoginScreen(
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                if (isLoading) "Signing in..." else "Sign In to Focus Shield →",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                letterSpacing = 0.3.sp
-                            )
+                            if (isLoading) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "Signing in...",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        letterSpacing = 0.3.sp
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    "Sign In to Focus Shield →",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    letterSpacing = 0.3.sp
+                                )
+                            }
                         }
                     }
 
@@ -509,6 +624,12 @@ fun LoginScreen(
                 }
             }
         }
+
+        // ── Snackbar ──────────────────────────────────────────────────
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 
@@ -519,17 +640,28 @@ fun LoginScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
+    authViewModel: AuthViewModel = hiltViewModel(),
     onRegisterSuccess: () -> Unit,
     onNavigateToLogin: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var termsAccepted by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
+
+    // Per-field validation error messages
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var emailError by remember { mutableStateOf<String?>(null) }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+    var termsError by remember { mutableStateOf<String?>(null) }
+
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
+    val isLoading = authState is com.example.addictionreductionapp.utils.AuthState.Loading
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Focus tracking for glow effect
     val nameInteractionSource = remember { MutableInteractionSource() }
@@ -630,10 +762,13 @@ fun RegisterScreen(
 
                     Spacer(modifier = Modifier.height(28.dp))
 
-                    // Name Field
+                    // ── Name Field ────────────────────────────────────
                     OutlinedTextField(
                         value = name,
-                        onValueChange = { name = it },
+                        onValueChange = {
+                            name = it
+                            if (nameError != null) nameError = null
+                        },
                         placeholder = {
                             Text("Full Name", color = PlaceholderWhite, fontSize = 15.sp)
                         },
@@ -641,26 +776,30 @@ fun RegisterScreen(
                             Icon(
                                 Icons.Default.Person,
                                 contentDescription = "Name",
-                                tint = IconWhite04,
+                                tint = if (nameError != null) ValidationError else IconWhite04,
                                 modifier = Modifier.size(20.dp)
                             )
                         },
+                        isError = nameError != null,
                         interactionSource = nameInteractionSource,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = FocusBorderTeal,
-                            unfocusedBorderColor = GlassInputBorder,
+                            focusedBorderColor = if (nameError != null) ValidationError else FocusBorderTeal,
+                            unfocusedBorderColor = if (nameError != null) ValidationError.copy(alpha = 0.6f) else GlassInputBorder,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                             focusedContainerColor = GlassInput005,
                             unfocusedContainerColor = GlassInput005,
                             cursorColor = GradientTealA,
-                            focusedLeadingIconColor = GradientTealA,
-                            unfocusedLeadingIconColor = IconWhite04
+                            focusedLeadingIconColor = if (nameError != null) ValidationError else GradientTealA,
+                            unfocusedLeadingIconColor = if (nameError != null) ValidationError else IconWhite04,
+                            errorBorderColor = ValidationError,
+                            errorLeadingIconColor = ValidationError,
+                            errorTextColor = Color.White
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(
-                                if (isNameFocused) {
+                                if (isNameFocused && nameError == null) {
                                     Modifier.glassGlow(
                                         color = GradientTealA,
                                         borderRadius = 14.dp,
@@ -674,13 +813,26 @@ fun RegisterScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp)
                     )
+                    if (nameError != null) {
+                        Text(
+                            text = nameError!!,
+                            color = ValidationError,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, top = 4.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Email Field
+                    // ── Email Field ───────────────────────────────────
                     OutlinedTextField(
                         value = email,
-                        onValueChange = { email = it },
+                        onValueChange = {
+                            email = it
+                            if (emailError != null) emailError = null
+                        },
                         placeholder = {
                             Text("Email Address", color = PlaceholderWhite, fontSize = 15.sp)
                         },
@@ -688,26 +840,30 @@ fun RegisterScreen(
                             Icon(
                                 Icons.Default.Email,
                                 contentDescription = "Email",
-                                tint = IconWhite04,
+                                tint = if (emailError != null) ValidationError else IconWhite04,
                                 modifier = Modifier.size(20.dp)
                             )
                         },
+                        isError = emailError != null,
                         interactionSource = emailInteractionSource,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = FocusBorderTeal,
-                            unfocusedBorderColor = GlassInputBorder,
+                            focusedBorderColor = if (emailError != null) ValidationError else FocusBorderTeal,
+                            unfocusedBorderColor = if (emailError != null) ValidationError.copy(alpha = 0.6f) else GlassInputBorder,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                             focusedContainerColor = GlassInput005,
                             unfocusedContainerColor = GlassInput005,
                             cursorColor = GradientTealA,
-                            focusedLeadingIconColor = GradientTealA,
-                            unfocusedLeadingIconColor = IconWhite04
+                            focusedLeadingIconColor = if (emailError != null) ValidationError else GradientTealA,
+                            unfocusedLeadingIconColor = if (emailError != null) ValidationError else IconWhite04,
+                            errorBorderColor = ValidationError,
+                            errorLeadingIconColor = ValidationError,
+                            errorTextColor = Color.White
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(
-                                if (isEmailFocused) {
+                                if (isEmailFocused && emailError == null) {
                                     Modifier.glassGlow(
                                         color = GradientTealA,
                                         borderRadius = 14.dp,
@@ -721,13 +877,26 @@ fun RegisterScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp)
                     )
+                    if (emailError != null) {
+                        Text(
+                            text = emailError!!,
+                            color = ValidationError,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, top = 4.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Password Field
+                    // ── Password Field ────────────────────────────────
                     OutlinedTextField(
                         value = password,
-                        onValueChange = { password = it },
+                        onValueChange = {
+                            password = it
+                            if (passwordError != null) passwordError = null
+                        },
                         placeholder = {
                             Text("Password", color = PlaceholderWhite, fontSize = 15.sp)
                         },
@@ -735,7 +904,7 @@ fun RegisterScreen(
                             Icon(
                                 Icons.Default.Lock,
                                 contentDescription = "Password",
-                                tint = IconWhite04,
+                                tint = if (passwordError != null) ValidationError else IconWhite04,
                                 modifier = Modifier.size(20.dp)
                             )
                         },
@@ -753,6 +922,7 @@ fun RegisterScreen(
                                 )
                             }
                         },
+                        isError = passwordError != null,
                         interactionSource = passwordInteractionSource,
                         visualTransformation = if (passwordVisible)
                             VisualTransformation.None
@@ -760,22 +930,25 @@ fun RegisterScreen(
                             PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = FocusBorderTeal,
-                            unfocusedBorderColor = GlassInputBorder,
+                            focusedBorderColor = if (passwordError != null) ValidationError else FocusBorderTeal,
+                            unfocusedBorderColor = if (passwordError != null) ValidationError.copy(alpha = 0.6f) else GlassInputBorder,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                             focusedContainerColor = GlassInput005,
                             unfocusedContainerColor = GlassInput005,
                             cursorColor = GradientTealA,
-                            focusedLeadingIconColor = GradientTealA,
-                            unfocusedLeadingIconColor = IconWhite04,
+                            focusedLeadingIconColor = if (passwordError != null) ValidationError else GradientTealA,
+                            unfocusedLeadingIconColor = if (passwordError != null) ValidationError else IconWhite04,
                             focusedTrailingIconColor = GradientTealA,
-                            unfocusedTrailingIconColor = IconWhite04
+                            unfocusedTrailingIconColor = IconWhite04,
+                            errorBorderColor = ValidationError,
+                            errorLeadingIconColor = ValidationError,
+                            errorTextColor = Color.White
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(
-                                if (isPasswordFocused) {
+                                if (isPasswordFocused && passwordError == null) {
                                     Modifier.glassGlow(
                                         color = GradientTealA,
                                         borderRadius = 14.dp,
@@ -789,8 +962,18 @@ fun RegisterScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp)
                     )
+                    if (passwordError != null) {
+                        Text(
+                            text = passwordError!!,
+                            color = ValidationError,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, top = 4.dp)
+                        )
+                    }
 
-                    // Terms Checkbox
+                    // ── Terms Checkbox ────────────────────────────────
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -799,10 +982,13 @@ fun RegisterScreen(
                     ) {
                         Checkbox(
                             checked = termsAccepted,
-                            onCheckedChange = { termsAccepted = it },
+                            onCheckedChange = {
+                                termsAccepted = it
+                                if (it && termsError != null) termsError = null
+                            },
                             colors = CheckboxDefaults.colors(
                                 checkedColor = GradientTealA,
-                                uncheckedColor = IconWhite04
+                                uncheckedColor = if (termsError != null) ValidationError else IconWhite04
                             )
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -813,28 +999,85 @@ fun RegisterScreen(
                                     append("Terms of Service")
                                 }
                             },
-                            color = SubtitleWhite,
+                            color = if (termsError != null) ValidationError else SubtitleWhite,
                             fontSize = 13.sp
+                        )
+                    }
+                    if (termsError != null) {
+                        Text(
+                            text = termsError!!,
+                            color = ValidationError,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, bottom = 4.dp)
                         )
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // CTA Button - Elegant Frosted Glass Button with Glowing Outline
+                    // ── CTA Button ────────────────────────────────────
                     Button(
                         onClick = {
-                            if ((name.isNotBlank() && email.isNotBlank() && password.length >= 8 && termsAccepted)) {
-                                isLoading = true
-                                scope.launch {
-                                    delay(900)
-                                    AppDataStore.isLoggedIn.value = true
-                                    AppDataStore.userName.value = name
-                                    AppDataStore.saveToPrefs(context)
-                                    isLoading = false
-                                    onRegisterSuccess()
+                            // ── Step 1: Local validation — NEVER call Supabase if invalid ──
+                            var valid = true
+
+                            if (name.isBlank()) {
+                                nameError = "Name is required"
+                                valid = false
+                            }
+
+                            if (email.isBlank()) {
+                                emailError = "Email is required"
+                                valid = false
+                            } else if (!isValidEmail(email)) {
+                                emailError = "Enter a valid email address"
+                                valid = false
+                            }
+
+                            if (password.isBlank()) {
+                                passwordError = "Password is required"
+                                valid = false
+                            } else if (password.length < 6) {
+                                passwordError = "Password must contain at least 6 characters"
+                                valid = false
+                            }
+
+                            if (!termsAccepted) {
+                                termsError = "You must accept the Terms of Service"
+                                valid = false
+                            }
+
+                            if (!valid) return@Button
+
+                            // ── Step 2: Call real Supabase auth ──────────────────────────
+                            authViewModel.register(name, email, password) { result ->
+                                when (result) {
+                                    is AuthResult.Success -> {
+                                        scope.launch {
+                                            AppDataStore.isLoggedIn.value = true
+                                            AppDataStore.userName.value = name
+                                            AppDataStore.saveToPrefs(context)
+                                            onRegisterSuccess()
+                                        }
+                                    }
+                                    is AuthResult.EmailConfirmationRequired -> {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                "Verification email sent. Please check your inbox before logging in."
+                                            )
+                                            onNavigateToLogin()
+                                        }
+                                    }
+                                    is AuthResult.Failure -> {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(result.message)
+                                        }
+                                    }
                                 }
                             }
                         },
+                        enabled = !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp)
@@ -846,7 +1089,8 @@ fun RegisterScreen(
                             ),
                         shape = RoundedCornerShape(50.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Transparent
+                            containerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent
                         ),
                         elevation = ButtonDefaults.buttonElevation(
                             defaultElevation = 0.dp,
@@ -861,7 +1105,10 @@ fun RegisterScreen(
                                 .fillMaxSize()
                                 .background(
                                     Brush.linearGradient(
-                                        colors = listOf(CtaGradientA, CtaGradientB),
+                                        colors = listOf(
+                                            if (isLoading) CtaGradientA.copy(alpha = 0.6f) else CtaGradientA,
+                                            if (isLoading) CtaGradientB.copy(alpha = 0.6f) else CtaGradientB
+                                        ),
                                         start = Offset.Zero,
                                         end = Offset.Infinite
                                     ),
@@ -869,13 +1116,31 @@ fun RegisterScreen(
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                if (isLoading) "Creating account..." else "Join Now →",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                letterSpacing = 0.3.sp
-                            )
+                            if (isLoading) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "Creating Account...",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        letterSpacing = 0.3.sp
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    "Join Now →",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    letterSpacing = 0.3.sp
+                                )
+                            }
                         }
                     }
 
@@ -904,6 +1169,12 @@ fun RegisterScreen(
                 }
             }
         }
+
+        // ── Snackbar ──────────────────────────────────────────────────
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 
@@ -917,7 +1188,7 @@ fun SparkleIcon(
         val h = size.height
         val cx = w / 2f
         val cy = h / 2f
-        
+
         val path = androidx.compose.ui.graphics.Path().apply {
             moveTo(cx, 0f)
             quadraticTo(cx, cy, w, cy)
