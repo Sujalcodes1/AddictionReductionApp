@@ -50,6 +50,11 @@ android {
             "SUPABASE_ANON_KEY",
             "\"${localProperties["SUPABASE_ANON_KEY"] ?: ""}\""
         )
+        buildConfigField(
+            "String",
+            "GEMINI_API_KEY",
+            "\"${localProperties["GEMINI_API_KEY"] ?: ""}\""
+        )
     }
 
     buildTypes {

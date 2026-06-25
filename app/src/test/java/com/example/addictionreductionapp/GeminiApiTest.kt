@@ -10,7 +10,7 @@ class GeminiApiTest {
         runBlocking {
             val generativeModel = GenerativeModel(
                 modelName = "gemini-2.0-flash",
-                apiKey = "BuildConfig.GEMINI_API_KEY"
+                apiKey = BuildConfig.GEMINI_API_KEY
             )
             try {
                 generativeModel.generateContent("Hello")

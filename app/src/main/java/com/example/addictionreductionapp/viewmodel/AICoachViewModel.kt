@@ -38,7 +38,7 @@ class AICoachViewModel @Inject constructor(
 
     private val generativeModel = GenerativeModel(
         modelName = "gemini-2.0-flash",
-        apiKey = "BuildConfig.GEMINI_API_KEY"
+        apiKey = com.example.addictionreductionapp.BuildConfig.GEMINI_API_KEY
     )
 
     init {

@@ -216,11 +216,11 @@ The application accesses the Gemini models directly via:
 ```kotlin
 GenerativeModel(
     modelName = "gemini-2.0-flash",
-    apiKey = "YOUR_GEMINI_API_KEY"
+    apiKey = BuildConfig.GEMINI_API_KEY
 )
 ```
 > [!NOTE]
-> Make sure to replace the placeholder API key in [AICoachScreen.kt](file:///c:/Users/sujal%20trivedi/OneDrive/Me/Desktop/AddictionReductionApp-master/AddictionReductionApp-master/app/src/main/java/com/example/addictionreductionapp/screens/AICoachScreen.kt) with your personal key obtained from Google AI Studio.
+> Make sure to add your personal key obtained from Google AI Studio to your `local.properties` file as `GEMINI_API_KEY=your_key_here`.
 
 ### 3. Granting Required Android Permissions
 For the application to operate its monitoring and blocking layers correctly, the user must grant three critical system permissions inside their Android device settings:
