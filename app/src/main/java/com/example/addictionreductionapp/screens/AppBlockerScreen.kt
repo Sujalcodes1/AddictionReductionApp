@@ -1,11 +1,10 @@
 package com.example.addictionreductionapp.screens
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -14,23 +13,28 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.shadow
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.addictionreductionapp.components.GradientButton
-import com.example.addictionreductionapp.data.AppDataStore
+import com.example.addictionreductionapp.data.local.entities.AppLimitEntity
 import com.example.addictionreductionapp.ui.theme.*
+import com.example.addictionreductionapp.utils.AppCategoryResolver
+import com.example.addictionreductionapp.viewmodel.AppBlockerViewModel
 
 @Composable
-fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
-    val context = LocalContext.current
+fun AppBlockerScreen(
+    onBack: (() -> Unit)? = null,
+    viewModel: AppBlockerViewModel = hiltViewModel()
+) {
     var showScheduleDialog by remember { mutableStateOf(false) }
-    var scheduleAppIndex by remember { mutableIntStateOf(-1) }
+    var scheduleApp by remember { mutableStateOf<AppLimitEntity?>(null) }
+
+    val apps by viewModel.allApps.collectAsState()
+    val reductionPlans by viewModel.activeReductionPlans.collectAsState()
 
     Box(Modifier.fillMaxSize()
         .background(DarkBackground)
@@ -69,16 +73,13 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
 
         Spacer(Modifier.height(16.dp))
 
-        // Quick Block All Button
+        // Quick Block All Selected
         GradientButton(
             text = "Quick Block All Selected",
             onClick = {
-                for (i in AppDataStore.apps.indices) {
-                    if (AppDataStore.apps[i].isSelected) {
-                        AppDataStore.apps[i] = AppDataStore.apps[i].copy(isLocked = true)
-                    }
+                apps.filter { it.isSelected }.forEach { app ->
+                    viewModel.toggleLock(app)
                 }
-                AppDataStore.saveToPrefs(context)
             },
             icon = Icons.Default.Shield
         )
@@ -90,7 +91,8 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
             Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            itemsIndexed(AppDataStore.apps) { index, app ->
+            items(apps, key = { it.packageName }) { app ->
+                val index = apps.indexOf(app)
                 Card(
                     colors = CardDefaults.cardColors(containerColor = DarkCard),
                     shape = RoundedCornerShape(16.dp)
@@ -105,7 +107,7 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
-                                        app.name.first().toString(),
+                                        app.appName.first().toString(),
                                         color = if (app.isSelected) RegainTeal else TextGray,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp
@@ -117,11 +119,14 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
 
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    app.name,
+                                    app.appName,
                                     color = TextWhite,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
+                                val isReductionManaged = reductionPlans.any {
+                                    AppCategoryResolver.resolveCategory(app.packageName) == it.category && it.isActive
+                                }
                                 if (app.isSelected) {
                                     Text(
                                         "Limit: ${app.limitMinutes}m/day" +
@@ -130,13 +135,26 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
                                         fontSize = 11.sp
                                     )
                                 }
+                                if (isReductionManaged) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Surface(
+                                        color = RegainPurple.copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            "Smart Reduction",
+                                            color = RegainPurple,
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
                             }
 
                             Switch(
                                 checked = app.isSelected,
                                 onCheckedChange = {
-                                    AppDataStore.apps[index] = app.copy(isSelected = it)
-                                    AppDataStore.saveToPrefs(context)
+                                    viewModel.toggleSelection(app)
                                 },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = RegainTeal,
@@ -178,8 +196,7 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
                             Slider(
                                 value = app.limitMinutes.toFloat(),
                                 onValueChange = {
-                                    AppDataStore.apps[index] = app.copy(limitMinutes = it.toInt())
-                                    AppDataStore.saveToPrefs(context)
+                                    viewModel.updateLimit(app, it.toInt())
                                 },
                                 valueRange = 1f..180f,
                                 colors = SliderDefaults.colors(
@@ -198,7 +215,7 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
                                     modifier = Modifier
                                         .weight(1f)
                                         .clickable {
-                                            scheduleAppIndex = index
+                                            scheduleApp = app
                                             showScheduleDialog = true
                                         },
                                     color = DarkCardLight,
@@ -229,8 +246,7 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
                                     modifier = Modifier
                                         .weight(1f)
                                         .clickable {
-                                            AppDataStore.apps[index] = app.copy(isWhitelisted = !app.isWhitelisted)
-                                            AppDataStore.saveToPrefs(context)
+                                            viewModel.toggleWhitelist(app)
                                         },
                                     color = if (app.isWhitelisted) RegainTeal.copy(alpha = 0.15f) else DarkCardLight,
                                     shape = RoundedCornerShape(8.dp)
@@ -297,18 +313,15 @@ fun AppBlockerScreen(onBack: (() -> Unit)? = null) {
     } // Close Box
 
     // Schedule Dialog
-    if (showScheduleDialog && scheduleAppIndex >= 0) {
+    if (showScheduleDialog && scheduleApp != null) {
+        val app = scheduleApp!!
         ScheduleDialog(
-            appName = AppDataStore.apps[scheduleAppIndex].name,
-            currentStart = AppDataStore.apps[scheduleAppIndex].blockScheduleStart,
-            currentEnd = AppDataStore.apps[scheduleAppIndex].blockScheduleEnd,
+            appName = app.appName,
+            currentStart = app.blockScheduleStart,
+            currentEnd = app.blockScheduleEnd,
             onDismiss = { showScheduleDialog = false },
             onSave = { start, end ->
-                AppDataStore.apps[scheduleAppIndex] = AppDataStore.apps[scheduleAppIndex].copy(
-                    blockScheduleStart = start,
-                    blockScheduleEnd = end
-                )
-                AppDataStore.saveToPrefs(context)
+                viewModel.setSchedule(app, start, end)
                 showScheduleDialog = false
             }
         )

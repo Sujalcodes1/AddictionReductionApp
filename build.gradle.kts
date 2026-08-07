@@ -9,4 +9,6 @@ plugins {
     alias(libs.plugins.ksp) apply false
     // Hilt — Dagger DI framework for Android
     alias(libs.plugins.hilt.android) apply false
+    // Firebase — Google Services plugin processes google-services.json at build time
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }

@@ -2,6 +2,7 @@ package com.example.addictionreductionapp.screens
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -18,25 +19,40 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.addictionreductionapp.components.AchievementBadge
-import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.*
+import com.example.addictionreductionapp.viewmodel.AppBlockerViewModel
+import com.example.addictionreductionapp.viewmodel.HomeViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun ProfileScreen(
     onNavigateToApps: () -> Unit,
+    onNavigateToPrivacy: () -> Unit = {},
     onLogout: () -> Unit = {},
-    onNavigateToDbDebug: () -> Unit = {}
+    blockerViewModel: AppBlockerViewModel = hiltViewModel(),
+    homeViewModel: HomeViewModel = hiltViewModel()
 ) {
     val startCompose = android.os.SystemClock.elapsedRealtime()
     val context = LocalContext.current
+    val selectedAppCount by blockerViewModel.selectedAppCount.collectAsState()
+    val profile by homeViewModel.profile.collectAsState()
+    val achievements by homeViewModel.achievements.collectAsState()
+    val recentInterventions by homeViewModel.recentInterventions.collectAsState()
     val scrollState = rememberScrollState()
     var showNameDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var isDeleting by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    val authViewModel: com.example.addictionreductionapp.viewmodel.AuthViewModel = hiltViewModel()
 
     Column(
         Modifier
@@ -74,7 +90,7 @@ fun ProfileScreen(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            AppDataStore.userName.value.firstOrNull()?.uppercase() ?: "U",
+                            profile?.userName?.firstOrNull()?.uppercase() ?: "U",
                             color = RegainTeal,
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold
@@ -83,7 +99,7 @@ fun ProfileScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    AppDataStore.userName.value,
+                    profile?.userName ?: "User",
                     color = TextWhite,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
@@ -102,25 +118,25 @@ fun ProfileScreen(
                 ) {
                     ProfileStat(
                         icon = Icons.Default.LocalFireDepartment,
-                        value = "${AppDataStore.streakCount.intValue}",
+                        value = "${profile?.streakCount ?: 0}",
                         label = "STREAK",
                         tint = RegainOrange
                     )
                     ProfileStat(
                         icon = Icons.Default.Timer,
-                        value = "${AppDataStore.totalFocusMinutes.intValue}m",
+                        value = "${profile?.totalFocusMinutes ?: 0}m",
                         label = "FOCUS",
                         tint = RegainTeal
                     )
                     ProfileStat(
                         icon = Icons.Default.CheckCircle,
-                        value = "${AppDataStore.sessionsCompleted.intValue}",
+                        value = "${profile?.sessionsCompleted ?: 0}",
                         label = "SESSIONS",
                         tint = SuccessGreen
                     )
                     ProfileStat(
                         icon = Icons.Default.EmojiEvents,
-                        value = "${AppDataStore.longestStreak.intValue}",
+                        value = "${profile?.longestStreak ?: 0}",
                         label = "BEST",
                         tint = RegainAmber
                     )
@@ -138,14 +154,13 @@ fun ProfileScreen(
             fontWeight = FontWeight.Bold
         )
         Text(
-            "${AppDataStore.achievements.count { it.isUnlocked }} / ${AppDataStore.achievements.size} unlocked",
+            "${achievements.count { it.isUnlocked }} / ${achievements.size} unlocked",
             color = TextGray,
             fontSize = 13.sp
         )
         Spacer(Modifier.height(12.dp))
 
         // Achievements Grid (non-scrollable, fixed height)
-        val achievements = AppDataStore.achievements
         val rows = (achievements.size + 2) / 3
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (row in 0 until rows) {
@@ -174,6 +189,58 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(24.dp))
 
+        if (recentInterventions.isNotEmpty()) {
+            Text(
+                "Recent Interventions",
+                color = TextWhite,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(12.dp))
+            recentInterventions.forEach { intervention ->
+                Card(
+                    Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkCard),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            when (intervention.type) {
+                                "breathing" -> Icons.Default.Air
+                                "journal" -> Icons.Default.Edit
+                                "affirmation" -> Icons.Default.Favorite
+                                else -> Icons.Default.SelfImprovement
+                            },
+                            contentDescription = null,
+                            tint = RegainPurple,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                intervention.type.replaceFirstChar { it.uppercase() },
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (!intervention.journalText.isNullOrBlank()) {
+                                Text(
+                                    intervention.journalText.take(50),
+                                    color = TextGray,
+                                    fontSize = 11.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
         // Settings Section
         Text(
             "Settings",
@@ -186,7 +253,7 @@ fun ProfileScreen(
         SettingsItem(
             icon = Icons.Default.Shield,
             title = "Manage App Limits",
-            subtitle = "${AppDataStore.apps.count { it.isSelected }} apps tracked",
+            subtitle = "$selectedAppCount apps tracked",
             onClick = onNavigateToApps
         )
 
@@ -212,14 +279,18 @@ fun ProfileScreen(
             icon = Icons.Default.Notifications,
             title = "Notifications",
             subtitle = "Manage notification preferences",
-            onClick = { }
+            onClick = {
+                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                })
+            }
         )
 
         SettingsItem(
-            icon = Icons.Default.Info,
-            title = "About",
-            subtitle = "Version 1.0.0",
-            onClick = { }
+            icon = Icons.Default.Security,
+            title = "Privacy Policy",
+            subtitle = "How we handle your data",
+            onClick = onNavigateToPrivacy
         )
 
         SettingsItem(
@@ -229,22 +300,123 @@ fun ProfileScreen(
             onClick = onLogout
         )
 
-        // ── DEBUG ONLY — Remove before shipping ──────────────────────────────
-        SettingsItem(
-            icon = Icons.Default.BugReport,
-            title = "Room DB Inspector",
-            subtitle = "Debug: view & insert focus_sessions",
-            onClick = onNavigateToDbDebug,
-            iconTint = RegainAmber
-        )
-        // ── END DEBUG ────────────────────────────────────────────────────────
+        Spacer(Modifier.height(16.dp))
+
+        // Danger Zone
+        Card(
+            colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.08f)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.3f))
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    "Danger Zone",
+                    color = ErrorRed,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Permanently delete your account and all associated data. This action cannot be undone.",
+                    color = TextGray,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = { showDeleteDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f)),
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent)
+                ) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Delete Account", color = ErrorRed, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
         Spacer(Modifier.height(24.dp))
     }
 
+    // ── Delete Account Confirmation Dialog ─────────────────────────────
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isDeleting) showDeleteDialog = false },
+            containerColor = DarkCard,
+            shape = RoundedCornerShape(20.dp),
+            icon = {
+                Icon(Icons.Default.Warning, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(36.dp))
+            },
+            title = {
+                Text("Delete Account", color = TextWhite, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column {
+                    Text(
+                        "Are you sure you want to permanently delete your account?",
+                        color = TextGray,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "This will:\n• Sign you out on all devices\n• Clear all local data (usage, goals, messages)\n• Remove your account from our servers",
+                        color = TextGray.copy(alpha = 0.7f),
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "This action cannot be undone.",
+                        color = ErrorRed,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isDeleting = true
+                        scope.launch {
+                            authViewModel.deleteAccount { success ->
+                                isDeleting = false
+                                showDeleteDialog = false
+                                onLogout()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
+                    enabled = !isDeleting
+                ) {
+                    if (isDeleting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text("Delete Permanently", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteDialog = false },
+                    enabled = !isDeleting
+                ) {
+                    Text("Cancel", color = TextGray)
+                }
+            }
+        )
+    }
+
     // Name Edit Dialog
     if (showNameDialog) {
-        var newName by remember { mutableStateOf(AppDataStore.userName.value) }
+        var newName by remember { mutableStateOf(profile?.userName ?: "User") }
         AlertDialog(
             onDismissRequest = { showNameDialog = false },
             title = { Text("Edit Name", color = TextWhite) },
@@ -266,8 +438,11 @@ fun ProfileScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        AppDataStore.userName.value = newName.ifBlank { "User" }
-                        AppDataStore.saveToPrefs(context)
+                        newName = newName.ifBlank { "User" }
+                        scope.launch {
+                            val current = homeViewModel.profile.value ?: com.example.addictionreductionapp.data.local.entities.UserProfileEntity()
+                            homeViewModel.updateUserName(newName)
+                        }
                         showNameDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RegainTeal)

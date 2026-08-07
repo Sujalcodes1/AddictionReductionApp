@@ -19,16 +19,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.shadow
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.addictionreductionapp.components.AnimatedCircularProgress
-import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.*
-import kotlinx.coroutines.delay
+import com.example.addictionreductionapp.viewmodel.FocusSessionViewModel
 
 data class AmbientSound(
     val name: String,
@@ -37,17 +36,18 @@ data class AmbientSound(
 )
 
 @Composable
-fun FocusTimerScreen() {
-    val context = LocalContext.current
+fun FocusTimerScreen(
+    focusSessionViewModel: FocusSessionViewModel = hiltViewModel()
+) {
     val scrollState = rememberScrollState()
 
-    // Timer state — local remember (this screen is no longer in the NavHost)
-    var selectedDuration by remember { mutableIntStateOf(25) }
-    var isTimerRunning by remember { mutableStateOf(false) }
-    var remainingSeconds by remember { mutableIntStateOf(25 * 60) }
-    var isLockMode by remember { mutableStateOf(false) }
-    var showComplete by remember { mutableStateOf(false) }
-    var selectedSoundIndex by remember { mutableIntStateOf(4) }
+    val selectedDuration by focusSessionViewModel.selectedDuration.collectAsState()
+    val isTimerRunning by focusSessionViewModel.isRunning.collectAsState()
+    val remainingSeconds by focusSessionViewModel.remainingSeconds.collectAsState()
+    val isLockMode by focusSessionViewModel.isLockMode.collectAsState()
+    val showComplete by focusSessionViewModel.showComplete.collectAsState()
+    val selectedSoundIndex by focusSessionViewModel.selectedSoundIndex.collectAsState()
+    val profile by focusSessionViewModel.profile.collectAsState()
 
     val durations = listOf(15, 25, 45, 60, 90, 120)
     val sounds = listOf(
@@ -58,28 +58,13 @@ fun FocusTimerScreen() {
         AmbientSound("Silence", "Silence")
     )
 
-    // Timer logic
-    LaunchedEffect(isTimerRunning) {
-        if (isTimerRunning) {
-            while (remainingSeconds > 0 && isTimerRunning) {
-                delay(1000)
-                remainingSeconds--
-            }
-            if (remainingSeconds <= 0 && isTimerRunning) {
-                isTimerRunning = false
-                showComplete = true
-                AppDataStore.completeFocusSession(context, selectedDuration)
-                AppDataStore.incrementStreak(context)
-            }
-        }
-    }
-
     if (showComplete) {
         SessionCompleteScreen(
             duration = selectedDuration,
+            streak = profile?.streakCount ?: 0,
+            sessionsCompleted = profile?.sessionsCompleted ?: 0,
             onDismiss = {
-                showComplete = false
-                remainingSeconds = selectedDuration * 60
+                focusSessionViewModel.dismissComplete()
             }
         )
         return
@@ -105,7 +90,7 @@ fun FocusTimerScreen() {
                 Surface(
                     color = if (isLockMode) RegainTeal.copy(alpha = 0.2f) else DarkCard,
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.clickable { if (!isTimerRunning) isLockMode = !isLockMode }
+                    modifier = Modifier.clickable { focusSessionViewModel.toggleLockMode() }
                 ) {
                     Row(
                         Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -149,7 +134,7 @@ fun FocusTimerScreen() {
                     durations.forEach { mins ->
                         val isSelected = selectedDuration == mins
                         Surface(
-                            modifier = Modifier.weight(1f).clickable { selectedDuration = mins; remainingSeconds = mins * 60 },
+                            modifier = Modifier.weight(1f).clickable { focusSessionViewModel.setDuration(mins) },
                             color = if (isSelected) RegainTeal.copy(alpha = 0.15f) else DarkCard,
                             shape = RoundedCornerShape(12.dp),
                             border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, RegainTeal) else null
@@ -166,7 +151,7 @@ fun FocusTimerScreen() {
                     sounds.forEachIndexed { index, sound ->
                         val isSelected = selectedSoundIndex == index
                         Surface(
-                            modifier = Modifier.weight(1f).clickable { selectedSoundIndex = index },
+                            modifier = Modifier.weight(1f).clickable { focusSessionViewModel.setSoundIndex(index) },
                             color = if (isSelected) RegainTeal.copy(alpha = 0.15f) else DarkCard,
                             shape = RoundedCornerShape(12.dp),
                             border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, RegainTeal) else null
@@ -185,7 +170,7 @@ fun FocusTimerScreen() {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (!isLockMode) {
                         OutlinedButton(
-                            onClick = { isTimerRunning = false; remainingSeconds = selectedDuration * 60 },
+                            onClick = { focusSessionViewModel.resetTimer() },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(56.dp)
@@ -211,7 +196,7 @@ fun FocusTimerScreen() {
                         }
                     }
                     Button(
-                        onClick = { isTimerRunning = false },
+                        onClick = { focusSessionViewModel.pauseTimer() },
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp)
@@ -238,7 +223,7 @@ fun FocusTimerScreen() {
                 }
             } else {
                 Button(
-                    onClick = { if (remainingSeconds == 0) remainingSeconds = selectedDuration * 60; isTimerRunning = true },
+                    onClick = { focusSessionViewModel.startTimer() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(60.dp)
@@ -283,7 +268,7 @@ fun FocusTimerScreen() {
 }
 
 @Composable
-fun SessionCompleteScreen(duration: Int, onDismiss: () -> Unit) {
+fun SessionCompleteScreen(duration: Int, streak: Int, sessionsCompleted: Int, onDismiss: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "celebrate")
     val scale by infiniteTransition.animateFloat(
         initialValue = 0.95f, targetValue = 1.05f,
@@ -312,7 +297,7 @@ fun SessionCompleteScreen(duration: Int, onDismiss: () -> Unit) {
                     Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = RegainOrange, modifier = Modifier.size(28.dp))
                         Spacer(Modifier.height(4.dp))
-                        Text("${AppDataStore.streakCount.intValue}", color = TextWhite, fontWeight = FontWeight.Bold)
+                        Text("${streak}", color = TextWhite, fontWeight = FontWeight.Bold)
                         Text("Streak", color = TextGray, fontSize = 11.sp)
                     }
                 }
@@ -320,7 +305,7 @@ fun SessionCompleteScreen(duration: Int, onDismiss: () -> Unit) {
                     Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(28.dp))
                         Spacer(Modifier.height(4.dp))
-                        Text("${AppDataStore.sessionsCompleted.intValue}", color = TextWhite, fontWeight = FontWeight.Bold)
+                        Text("${sessionsCompleted}", color = TextWhite, fontWeight = FontWeight.Bold)
                         Text("Total", color = TextGray, fontSize = 11.sp)
                     }
                 }

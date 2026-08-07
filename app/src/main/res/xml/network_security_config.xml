@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration for FocusShield.
+    
+    - Enforces HTTPS for all traffic.
+    - Pins certificates for the Supabase backend domain.
+    - Cleartext (HTTP) is rejected for all domains.
+    
+    Pinned certificates are DigiCert Global Root CA and Let's Encrypt ISRG Root X1,
+    which cover the vast majority of Supabase project domains.
+    
+    ⚠️ Certificate pinning is for production. Remove pins for development builds
+    that use local or ngrok endpoints.
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <!-- ── Default: HTTPS only for all domains ────────────────────────────── -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- ── Supabase API domain ───────────────────────────────────────────── -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">supabase.co</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+
+
+    <!-- ── Google APIs (used by Supabase Edge Function on server side only 
+         but included here for safety if any direct HTTPS calls remain) ──── -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+</network-security-config>

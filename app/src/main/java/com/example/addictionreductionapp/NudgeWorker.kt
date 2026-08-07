@@ -1,41 +1,50 @@
 package com.example.addictionreductionapp
 
-import android.app.usage.UsageStatsManager
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.addictionreductionapp.data.AppDataStore
-import java.util.Calendar
+import com.example.addictionreductionapp.data.repository.AppLimitRepository
+import com.example.addictionreductionapp.data.repository.ReductionPlanRepository
+import com.example.addictionreductionapp.data.repository.AppUsageRepository
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class NudgeWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface WorkerEntryPoint {
+        fun appLimitRepository(): AppLimitRepository
+        fun appUsageRepository(): AppUsageRepository
+        fun reductionPlanRepository(): ReductionPlanRepository
+    }
+
     override suspend fun doWork(): Result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        AppDataStore.loadFromPrefs(applicationContext)
-        val selectedApps = AppDataStore.apps.filter { it.isSelected }
+        val entryPoint = EntryPointAccessors.fromApplication(
+            applicationContext,
+            WorkerEntryPoint::class.java
+        )
+        val selectedApps = entryPoint.appLimitRepository().getSelectedAppsOnce()
 
         if (selectedApps.isEmpty()) {
             return@withContext Result.success()
         }
 
-        val usageStatsManager = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        val startTime = calendar.timeInMillis
-        val endTime = System.currentTimeMillis()
-
-        val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val appUsageRepo = entryPoint.appUsageRepository()
 
         var shouldNudge = false
         for (app in selectedApps) {
-            val pkgStats = stats.filter { it.packageName == app.packageName }
-            val timeInForeground = pkgStats.sumOf { it.totalTimeInForeground }
-            val timeMins = (timeInForeground / (1000 * 60)).toInt()
+            val usage = appUsageRepo.getUsageForAppOnDate(app.packageName, today)
+            val timeMins = usage?.usageMinutes ?: 0
 
             if (timeMins >= app.limitMinutes / 2) {
                 shouldNudge = true
@@ -51,7 +60,7 @@ class NudgeWorker(
                 "Ready for a digital detox? Put the phone down for 5 minutes."
             )
             val nudge = nudges.random()
-            
+
             NotificationHelper.sendNotification(
                 context = applicationContext,
                 channelId = NotificationHelper.CHANNEL_NUDGE,
@@ -61,6 +70,31 @@ class NudgeWorker(
             )
         }
 
+        checkLimitApproaching(entryPoint, today)
+
         return@withContext Result.success()
+    }
+
+    private suspend fun checkLimitApproaching(
+        entryPoint: WorkerEntryPoint,
+        today: String
+    ) {
+        val planRepo = entryPoint.reductionPlanRepository()
+        val appUsageRepo = entryPoint.appUsageRepository()
+        val activePlans = planRepo.getActive()
+
+        for (plan in activePlans) {
+            val used = appUsageRepo.getTotalMinutesForCategory(plan.category, today)
+            val remaining = plan.currentTarget - used
+            if (remaining in 1..10) {
+                NotificationHelper.sendNotification(
+                    context = applicationContext,
+                    channelId = NotificationHelper.CHANNEL_LIMIT_APPROACHING,
+                    notifId = ("limit_${plan.id}").hashCode(),
+                    title = "$remaining min remaining",
+                    body = "You have $remaining minutes of ${plan.category} remaining today. Stay mindful!"
+                )
+            }
+        }
     }
 }

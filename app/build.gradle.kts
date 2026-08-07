@@ -12,6 +12,8 @@ plugins {
     alias(libs.plugins.ksp)
     // Hilt DI — was incorrectly commented out; @HiltAndroidApp requires this plugin
     alias(libs.plugins.hilt.android)
+    // Firebase — applies Google Services plugin to process google-services.json
+    id("com.google.gms.google-services")
 }
 
 // ── Credentials: read SUPABASE_URL and SUPABASE_ANON_KEY from local.properties ──────────
@@ -32,8 +34,8 @@ android {
         applicationId = "com.example.addictionreductionapp"
         minSdk = 26  // Raised from 24: Supabase-kt 3.x native requirement; eliminates desugaring overhead
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -50,20 +52,27 @@ android {
             "SUPABASE_ANON_KEY",
             "\"${localProperties["SUPABASE_ANON_KEY"] ?: ""}\""
         )
-        buildConfigField(
-            "String",
-            "GEMINI_API_KEY",
-            "\"${localProperties["GEMINI_API_KEY"] ?: ""}\""
-        )
+        // GEMINI_API_KEY removed — AI requests proxy through Supabase Edge Function (M1.1)
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("../smartfocus-release.keystore")
+            storePassword = localProperties["KEYSTORE_PASSWORD"] as String? ?: ""
+            keyAlias = localProperties["KEY_ALIAS"] as String? ?: "smartfocus"
+            keyPassword = localProperties["KEY_PASSWORD"] as String? ?: ""
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -151,16 +160,18 @@ dependencies {
     // ── Kotlin Coroutines ─────────────────────────────────────────────────────
     implementation(libs.kotlinx.coroutines.android)
 
-    // ── Generative AI (Gemini) ────────────────────────────────────────────────
-    implementation(libs.generativeai)
-
     // ── Gson (used by Room TypeConverters for List<String> / List<Int>) ────────
     implementation("com.google.code.gson:gson:2.10.1")
 
-    // ── Supabase Auth + Postgrest (BOM manages versions — no explicit version needed) ──
+    // ── Supabase Auth + Postgrest + Functions (BOM manages versions) ─────────────
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)      // auth-kt: Supabase GoTrue v2 / Auth
     implementation(libs.supabase.postgrest) // postgrest-kt: user_profiles upsert
+    implementation(libs.supabase.functions) // functions-kt: AI Coach Edge Function invocation
+
+    // ── SQLCipher — AES-256 encrypted Room database ───────────────────────────
+    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
+    implementation("androidx.sqlite:sqlite:2.4.0")
 
     // ── Ktor OkHttp engine (required at runtime by Supabase-kt on Android) ────────
     implementation(libs.ktor.client.okhttp)

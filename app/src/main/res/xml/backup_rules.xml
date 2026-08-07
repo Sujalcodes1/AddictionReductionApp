@@ -1,13 +1,27 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Auto Backup rules for FocusShield (M9).
+    
+    Strategy:
+    - INCLUDE: SharedPreferences (app preferences, not auth tokens)
+    - EXCLUDE: EncryptedSharedPreferences (auth tokens, DB passphrase)
+    - EXCLUDE: Room database (encrypted, but excluded to prevent large backups)
+    
+    User can restore app settings but must re-authenticate.
+    The Room database is recreated from cloud on fresh install.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- Include all sharedpref and database domains, then exclude sensitive files -->
+    <include domain="sharedpref" path="." />
+    <include domain="database" path="." />
+
+    <!-- Exclude EncryptedSharedPreferences (contains auth tokens + DB passphrase) -->
+    <exclude domain="sharedpref" path="auth_session_prefs.xml" />
+    <exclude domain="sharedpref" path="db_passphrase_prefs.xml" />
+    <exclude domain="sharedpref" path="auth_session_prefs_fallback.xml" />
+
+    <!-- Exclude Room database (encrypted, backed up via cloud sync instead) -->
+    <exclude domain="database" path="smartfocus.db" />
+    <exclude domain="database" path="smartfocus.db-wal" />
+    <exclude domain="database" path="smartfocus.db-shm" />
 </full-backup-content>

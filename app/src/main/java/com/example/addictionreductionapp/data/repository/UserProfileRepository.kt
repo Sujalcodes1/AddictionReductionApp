@@ -59,6 +59,14 @@ class UserProfileRepository @Inject constructor(
     suspend fun incrementStreak() = userProfileDao.incrementStreak()
 
     /**
+     * Reset streak to zero (e.g., user broke their goal on a given day).
+     */
+    suspend fun resetStreak() {
+        val current = getProfile() ?: return
+        upsert(current.copy(streakCount = 0))
+    }
+
+    /**
      * Atomically add [minutes] to total focus time and bump the session counter.
      * Call this immediately after a focus session is persisted.
      *

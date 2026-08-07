@@ -23,7 +23,9 @@ rootProject.name = "AddictionReductionApp"
 include(":app")
 
 // Redirect build directory outside of OneDrive to fix AccessDeniedException and file locking issues
-gradle.beforeProject {
-    val buildDirName = if (project == rootProject) "root" else project.name
-    layout.buildDirectory.set(file("C:/gradle_builds/AddictionReductionApp/$buildDirName"))
-}
+// Commented out to prevent cross-drive KSP compilation errors between C: and D: drives.
+// gradle.beforeProject {
+//     val buildDirName = if (project == rootProject) "root" else project.name
+//     layout.buildDirectory.set(file("C:/gradle_builds/AddictionReductionApp/$buildDirName"))
+// }
+

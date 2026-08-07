@@ -24,7 +24,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.addictionreductionapp.components.PrimaryButton
-import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -115,19 +114,16 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 PrimaryButton(
                     text = "Get Started",
                     onClick = {
-                        AppDataStore.hasCompletedOnboarding.value = true
-                        AppDataStore.saveToPrefs(context)
                         onComplete()
                     }
                 )
             } else {
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = {
-                        AppDataStore.hasCompletedOnboarding.value = true
-                        AppDataStore.saveToPrefs(context)
                         onComplete()
                     }) {
                         Text("Skip", color = TextGray, fontSize = 16.sp)

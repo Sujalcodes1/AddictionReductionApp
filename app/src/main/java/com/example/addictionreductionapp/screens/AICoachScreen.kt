@@ -3,6 +3,9 @@ package com.example.addictionreductionapp.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -12,6 +15,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.filled.Report
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.DisposableEffect
@@ -34,6 +39,11 @@ fun AICoachScreen(
     val startCompose = android.os.SystemClock.elapsedRealtime()
     
     val uiState by viewModel.uiState.collectAsState()
+    val coachInsights by viewModel.coachInsights.collectAsState()
+
+    var showReportDialog by remember { mutableStateOf(false) }
+    var reportMessageIndex by remember { mutableIntStateOf(-1) }
+    var reportReason by remember { mutableStateOf("") }
     
     val listState = rememberLazyListState()
 
@@ -73,7 +83,10 @@ fun AICoachScreen(
                 .background(Color(0xFF0F171E))
                 .padding(16.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Box(
                     Modifier
                         .size(44.dp)
@@ -83,7 +96,7 @@ fun AICoachScreen(
                     Text("🔥", fontSize = 22.sp)
                 }
                 Spacer(Modifier.width(12.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(
                         "Arjuna",
                         color = Color.White,
@@ -91,10 +104,67 @@ fun AICoachScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "AI Focus Coach • Online",
-                        color = Color(0xFF00BFA5),
+                        if (uiState.rateLimitReached) "Limit reached" else "AI Focus Coach • Online",
+                        color = if (uiState.rateLimitReached) Color(0xFFFF9800) else Color(0xFF00BFA5),
                         fontSize = 12.sp
                     )
+                }
+                if (uiState.messages.size > 1) {
+                    TextButton(
+                        onClick = { viewModel.clearConversation() },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            "Clear",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── Insight Cards ─────────────────────────────────────────
+        if (coachInsights.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(end = 12.dp)
+            ) {
+                items(coachInsights.take(3)) { insight ->
+                    val accent = when (insight.priority) {
+                        com.example.addictionreductionapp.data.models.CoachPriority.CRITICAL -> Color(0xFFFF4444)
+                        com.example.addictionreductionapp.data.models.CoachPriority.HIGH -> Color(0xFFFF9800)
+                        com.example.addictionreductionapp.data.models.CoachPriority.MEDIUM -> Color(0xFFFFEB3B)
+                        com.example.addictionreductionapp.data.models.CoachPriority.LOW -> Color(0xFF00BFA5)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .width(200.dp)
+                            .background(accent.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                            .border(1.dp, accent.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Text(
+                                insight.title,
+                                color = accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                insight.description,
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                                maxLines = 2
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -108,33 +178,70 @@ fun AICoachScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 12.dp)
         ) {
-            items(uiState.messages) { (sender, text) ->
+            items(uiState.messages.withIndex().toList()) { (index, pair) ->
+                val sender = pair.first
+                val text = pair.second
                 val isUser = sender == "user"
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
                 ) {
-                    Box(
-                        Modifier
-                            .widthIn(max = 280.dp)
-                            .background(
-                                if (isUser) Color(0xFF00BFA5).copy(alpha = 0.2f)
-                                else Color(0xFF0F171E),
-                                RoundedCornerShape(
-                                    topStart = 16.dp, topEnd = 16.dp,
-                                    bottomStart = if (isUser) 16.dp else 4.dp,
-                                    bottomEnd = if (isUser) 4.dp else 16.dp
+                    Column(horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
+                        Box(
+                            Modifier
+                                .widthIn(max = 280.dp)
+                                .background(
+                                    if (isUser) Color(0xFF00BFA5).copy(alpha = 0.2f)
+                                    else Color(0xFF0F171E),
+                                    RoundedCornerShape(
+                                        topStart = 16.dp, topEnd = 16.dp,
+                                        bottomStart = if (isUser) 16.dp else 4.dp,
+                                        bottomEnd = if (isUser) 4.dp else 16.dp
+                                    )
                                 )
-                            )
-                            .border(
-                                1.dp,
-                                if (isUser) Color(0xFF00BFA5).copy(alpha = 0.4f)
-                                else Color(0xFF1B262F),
-                                RoundedCornerShape(16.dp)
-                            )
-                            .padding(12.dp)
-                    ) {
-                        Text(text, color = Color.White, fontSize = 14.sp, lineHeight = 20.sp)
+                                .border(
+                                    1.dp,
+                                    if (isUser) Color(0xFF00BFA5).copy(alpha = 0.4f)
+                                    else Color(0xFF1B262F),
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .padding(12.dp)
+                        ) {
+                            Text(text, color = Color.White, fontSize = 14.sp, lineHeight = 20.sp)
+                        }
+                        if (!isUser) {
+                            Spacer(Modifier.height(4.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.WarningAmber,
+                                    contentDescription = "AI-generated",
+                                    tint = Color(0xFFFF9800).copy(alpha = 0.7f),
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Spacer(Modifier.width(3.dp))
+                                Text(
+                                    "AI-generated",
+                                    color = Color(0xFFFF9800).copy(alpha = 0.6f),
+                                    fontSize = 9.sp
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Report",
+                                    color = Color.Gray,
+                                    fontSize = 9.sp,
+                                    modifier = Modifier.clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) {
+                                        reportMessageIndex = index
+                                        showReportDialog = true
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -211,6 +318,65 @@ fun AICoachScreen(
             }
         }
     }
+
+    // ── Report AI Response Dialog ────────────────────────────────────────
+    if (showReportDialog) {
+        val reportOptions = listOf("Offensive or inappropriate", "Harmful advice", "Inaccurate or misleading", "Spam or irrelevant", "Other")
+        AlertDialog(
+            onDismissRequest = { showReportDialog = false; reportReason = "" },
+            containerColor = Color(0xFF0F171E),
+            shape = RoundedCornerShape(16.dp),
+            title = { Text("Report AI Response", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            text = {
+                Column {
+                    Text(
+                        "Why are you reporting this response?",
+                        color = Color.Gray,
+                        fontSize = 13.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    reportOptions.forEach { option ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { reportReason = option }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = reportReason == option,
+                                onClick = { reportReason = option },
+                                colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF00BFA5))
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(option, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        android.util.Log.w("AICoachAudit", "AI response reported: reason=$reportReason, messageIndex=$reportMessageIndex")
+                        showReportDialog = false
+                        reportReason = ""
+                        reportMessageIndex = -1
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFA5)),
+                    shape = RoundedCornerShape(8.dp),
+                    enabled = reportReason.isNotEmpty()
+                ) {
+                    Text("Submit Report", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReportDialog = false; reportReason = "" }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
+    }
+
     SideEffect {
         val duration = android.os.SystemClock.elapsedRealtime() - startCompose
         android.util.Log.d("PerfDebug", "AICoachScreen composed in $duration ms")

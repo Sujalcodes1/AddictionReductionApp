@@ -8,14 +8,23 @@ import androidx.room.TypeConverters
 import com.example.addictionreductionapp.data.local.converters.Converters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.addictionreductionapp.data.local.dao.AchievementDao
 import com.example.addictionreductionapp.data.local.dao.AppLimitDao
 import com.example.addictionreductionapp.data.local.dao.AppUsageDao
+import com.example.addictionreductionapp.data.local.dao.ChatMessageDao
 import com.example.addictionreductionapp.data.local.dao.FocusSessionDao
+import com.example.addictionreductionapp.data.local.dao.ReductionPlanDao
 import com.example.addictionreductionapp.data.local.dao.UserProfileDao
+import com.example.addictionreductionapp.data.local.entities.AchievementEntity
 import com.example.addictionreductionapp.data.local.entities.AppLimitEntity
 import com.example.addictionreductionapp.data.local.entities.AppUsageEntity
+import com.example.addictionreductionapp.data.local.entities.ChatMessageEntity
 import com.example.addictionreductionapp.data.local.entities.FocusSessionEntity
+import com.example.addictionreductionapp.data.local.entities.GoalEntity
+import com.example.addictionreductionapp.data.local.entities.InterventionEntity
+import com.example.addictionreductionapp.data.local.entities.ReductionPlanEntity
 import com.example.addictionreductionapp.data.local.entities.UserProfileEntity
+import net.sqlcipher.database.SupportFactory
 
 /**
  * SmartFocus Room Database — the single source of truth for all persistent data.
@@ -53,13 +62,18 @@ import com.example.addictionreductionapp.data.local.entities.UserProfileEntity
  */
 @Database(
     entities = [
+        AchievementEntity::class,
+        ChatMessageEntity::class,
         AppLimitEntity::class,
         AppUsageEntity::class,
         FocusSessionEntity::class,
+        GoalEntity::class,
+        InterventionEntity::class,
+        ReductionPlanEntity::class,
         UserProfileEntity::class,
         com.example.addictionreductionapp.data.local.entities.DailyBehaviorSnapshotEntity::class
     ],
-    version = 3,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -85,12 +99,27 @@ abstract class AppDatabase : RoomDatabase() {
     /** DAO for historical behavior snapshots. */
     abstract fun dailyBehaviorSnapshotDao(): com.example.addictionreductionapp.data.local.dao.DailyBehaviorSnapshotDao
 
+    /** DAO for user goals. */
+    abstract fun goalDao(): com.example.addictionreductionapp.data.local.dao.GoalDao
+
+    /** DAO for interventions. */
+    abstract fun interventionDao(): com.example.addictionreductionapp.data.local.dao.InterventionDao
+
+    /** DAO for achievements. */
+    abstract fun achievementDao(): AchievementDao
+
+    /** DAO for chat messages. */
+    abstract fun chatMessageDao(): ChatMessageDao
+
+    /** DAO for reduction plans. */
+    abstract fun reductionPlanDao(): ReductionPlanDao
+
     // ── Manual singleton (for Workers / non-Hilt contexts) ────────────────────
 
     companion object {
 
         /** Current schema version. Increment on every schema change. */
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 10
 
         /** SQLite file name on disk. */
         private const val DATABASE_NAME = "smartfocus.db"
@@ -117,22 +146,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private fun buildDatabase(context: Context): AppDatabase =
-            Room.databaseBuilder(
+        private fun buildDatabase(context: Context): AppDatabase {
+            val passphrase = DatabaseSecurity.getOrCreatePassphrase(context)
+            return Room.databaseBuilder(
                 context,
                 AppDatabase::class.java,
                 DATABASE_NAME
             )
+                // ── SQLCipher encryption (M1.3) ──────────────────────────
+                // All data at rest is encrypted with a device-unique key
+                // managed by DatabaseSecurity via Android Keystore.
+                .openHelperFactory(SupportFactory(passphrase))
                 // ── Migration strategy ─────────────────────────────────────
                 // Add new migrations here in version order. Room applies them
                 // sequentially; never use fallbackToDestructiveMigration() in
                 // production unless data loss is explicitly acceptable.
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 // ── Performance ────────────────────────────────────────────
                 // enableMultiInstanceInvalidation is needed if you open the same
                 // DB from multiple processes (e.g. an isolated :accessibility process).
                 .enableMultiInstanceInvalidation()
                 .build()
+        }
 
         /**
          * Migration 1 → 2: adds the "app_usage" table with its indices.
@@ -196,6 +231,143 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `goals` (
+                        `id` INTEGER NOT NULL,
+                        `daily_target_minutes` INTEGER NOT NULL DEFAULT 120,
+                        `weekly_target_minutes` INTEGER NOT NULL DEFAULT 840,
+                        `baseline_daily_average` INTEGER NOT NULL DEFAULT 0,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `interventions` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `package_name_blocked` TEXT,
+                        `journal_text` TEXT,
+                        `timestamp` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `achievements` (
+                        `id` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `icon` TEXT NOT NULL,
+                        `is_unlocked` INTEGER NOT NULL DEFAULT 0,
+                        `progress` REAL NOT NULL DEFAULT 0.0,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `chat_messages` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `sender` TEXT NOT NULL,
+                        `text` TEXT NOT NULL,
+                        `timestamp` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `reduction_plans` (
+                        `id` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `baseline_minutes` INTEGER NOT NULL,
+                        `current_target` INTEGER NOT NULL,
+                        `daily_step_down` INTEGER NOT NULL DEFAULT 10,
+                        `floor_minutes` INTEGER NOT NULL DEFAULT 30,
+                        `is_active` INTEGER NOT NULL DEFAULT 1,
+                        `days_active` INTEGER NOT NULL DEFAULT 0,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        /**
+         * Migration 8 → 9: adds onboarding/permissions tracking columns to user_profile.
+         * Also adds last_streak_date for StreakSyncManager (M3.1).
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `user_profile` ADD COLUMN `has_completed_permissions_screen` INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE `user_profile` ADD COLUMN `has_completed_smart_reduction_setup` INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE `user_profile` ADD COLUMN `last_streak_date` TEXT"
+                )
+            }
+        }
+        /**
+         * Migration 9 → 10: rewrites goals table from single-row screen-time targets
+         * to a multi-row personal goal system (M4).
+         * Existing data is preserved as a "Reduce Screen Time" default goal.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE goals_new (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `title` TEXT NOT NULL DEFAULT '',
+                        `description` TEXT NOT NULL DEFAULT '',
+                        `goal_type` TEXT NOT NULL DEFAULT 'CUSTOM',
+                        `target_screen_time_per_day` INTEGER NOT NULL DEFAULT 120,
+                        `saved_hours_total` INTEGER NOT NULL DEFAULT 0,
+                        `progress` REAL NOT NULL DEFAULT 0.0,
+                        `category` TEXT,
+                        `start_date` TEXT NOT NULL DEFAULT '',
+                        `target_date` TEXT,
+                        `is_active` INTEGER NOT NULL DEFAULT 1,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        `completed_at` INTEGER
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    INSERT INTO goals_new (title, description, goal_type, target_screen_time_per_day, start_date, created_at, updated_at)
+                    SELECT 'Reduce Screen Time', 'Reduce daily screen time to target', 'CUSTOM', COALESCE(daily_target_minutes, 120), date('now'), created_at, updated_at
+                    FROM goals WHERE id = 1
+                """.trimIndent())
+                db.execSQL("DROP TABLE goals")
+                db.execSQL("ALTER TABLE goals_new RENAME TO goals")
             }
         }
     }

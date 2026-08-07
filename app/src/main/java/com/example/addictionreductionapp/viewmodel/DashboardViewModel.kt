@@ -5,21 +5,25 @@ import androidx.lifecycle.viewModelScope
 import com.example.addictionreductionapp.data.analytics.BehavioralIntelligenceEngine
 import com.example.addictionreductionapp.data.analytics.FocusScoreEngine
 import com.example.addictionreductionapp.data.analytics.StreakEngine
+import com.example.addictionreductionapp.data.local.entities.DailyBehaviorSnapshotEntity
+import com.example.addictionreductionapp.data.local.entities.UserProfileEntity
 import com.example.addictionreductionapp.data.models.AddictionProfile
 import com.example.addictionreductionapp.data.models.FocusScoreDetails
 import com.example.addictionreductionapp.data.repository.AddictionIntelligenceRepository
 import com.example.addictionreductionapp.data.repository.AnalyticsRepository
 import com.example.addictionreductionapp.data.repository.DailyBehaviorSnapshotRepository
-import com.example.addictionreductionapp.data.local.entities.DailyBehaviorSnapshotEntity
+import com.example.addictionreductionapp.data.repository.UserProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -33,11 +37,21 @@ class DashboardViewModel @Inject constructor(
     private val focusScoreEngine: FocusScoreEngine,
     private val streakEngine: StreakEngine,
     private val behaviorEngine: BehavioralIntelligenceEngine,
-    private val dailyBehaviorSnapshotRepository: DailyBehaviorSnapshotRepository
+    private val dailyBehaviorSnapshotRepository: DailyBehaviorSnapshotRepository,
+    private val userProfileRepository: UserProfileRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState(isLoading = false))
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+
+    /** Live user profile for HomeScreen dashboard stats. */
+    val profile: StateFlow<UserProfileEntity?> = userProfileRepository
+        .observeProfile()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = null
+        )
 
     // ── Addiction Intelligence Profile ────────────────────────────────────────
     // Starts as null; first emission populates it after one combine cycle.
@@ -198,6 +212,13 @@ class DashboardViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         android.util.Log.d("NavDebug", "DashboardViewModel CLEARED (hashCode=${hashCode()})")
+    }
+
+    fun toggleFocusMode() {
+        viewModelScope.launch {
+            val current = userProfileRepository.getProfile() ?: UserProfileEntity()
+            userProfileRepository.upsert(current.copy(isFocusModeActive = !current.isFocusModeActive))
+        }
     }
 }
 

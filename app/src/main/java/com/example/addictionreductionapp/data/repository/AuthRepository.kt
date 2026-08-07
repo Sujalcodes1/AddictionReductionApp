@@ -1,4 +1,4 @@
-package com.example.addictionreductionapp.repository
+package com.example.addictionreductionapp.data.repository
 
 import com.example.addictionreductionapp.utils.AuthResult
 import com.example.addictionreductionapp.utils.SessionManager
@@ -18,7 +18,6 @@ class AuthRepository @Inject constructor(
     private val sessionManager: SessionManager
 ) {
 
-    // ── Register ──────────────────────────────────────────────────────────────────
     suspend fun register(name: String, email: String, password: String): AuthResult =
         withContext(Dispatchers.IO) {
             try {
@@ -28,12 +27,9 @@ class AuthRepository @Inject constructor(
                 }
                 val session = supabaseClient.auth.currentSessionOrNull()
                 if (session != null) {
-                    // Email confirmation disabled — session returned immediately
                     sessionManager.saveSession("active_session")
                     AuthResult.Success
                 } else {
-                    // Email confirmation enabled (Supabase default) — this is NOT an error.
-                    // The user must verify their email before a session is created.
                     AuthResult.EmailConfirmationRequired
                 }
             } catch (e: Exception) {
@@ -41,7 +37,6 @@ class AuthRepository @Inject constructor(
             }
         }
 
-    // ── Login ─────────────────────────────────────────────────────────────────────
     suspend fun login(email: String, password: String): AuthResult =
         withContext(Dispatchers.IO) {
             try {
@@ -61,18 +56,28 @@ class AuthRepository @Inject constructor(
             }
         }
 
-    // ── Logout ────────────────────────────────────────────────────────────────────
     suspend fun logout() = withContext(Dispatchers.IO) {
         try {
             supabaseClient.auth.signOut()
         } catch (e: Exception) {
-            // Best-effort: always clear local session even if remote sign-out fails
         } finally {
             sessionManager.clearSession()
         }
     }
 
-    // ── Deep Link / Callback Handling ──────────────────────────────────────────────
+    suspend fun deleteAccount(): Boolean = withContext(Dispatchers.IO) {
+        var remoteSuccess = false
+        try {
+            supabaseClient.auth.signOut()
+            remoteSuccess = true
+        } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Remote sign-out during account deletion failed", e)
+        } finally {
+            sessionManager.clearAllData()
+        }
+        remoteSuccess
+    }
+
     suspend fun handleAuthCallback(uriString: String): AuthResult = withContext(Dispatchers.IO) {
         try {
             val uri = android.net.Uri.parse(uriString)
@@ -94,39 +99,29 @@ class AuthRepository @Inject constructor(
         }
     }
 
-    // ── Session helpers ───────────────────────────────────────────────────────────
     fun currentSession(): String? = sessionManager.getSession()
 
     fun currentUser(): UserInfo? = supabaseClient.auth.currentUserOrNull()
 
-    // ── Exception → user-friendly message mapper ──────────────────────────────────
     private fun mapException(e: Exception): String {
         val msg = e.message?.lowercase() ?: ""
         return when {
             e is UnknownHostException || e is ConnectException ->
                 "No internet connection. Please check your network."
-
             e is HttpRequestTimeoutException ->
                 "Connection timed out. Please try again."
-
             msg.contains("invalid login credentials") || msg.contains("invalid_credentials") ->
                 "Invalid email or password."
-
             msg.contains("user already registered") || msg.contains("already been registered") ->
                 "An account with this email already exists."
-
             msg.contains("password should be at least") || msg.contains("weak_password") ->
                 "Password must contain at least 6 characters."
-
             msg.contains("unable to validate email") || msg.contains("invalid email") ->
                 "Invalid email address."
-
             msg.contains("email not confirmed") ->
                 "Please verify your email address before logging in."
-
             msg.contains("rate limit") || msg.contains("too many requests") ->
                 "Too many attempts. Please wait a moment and try again."
-
             else -> "Something went wrong. Please try again."
         }
     }

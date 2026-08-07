@@ -74,7 +74,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.DarkBackground
 import com.example.addictionreductionapp.ui.theme.DarkCard
 import com.example.addictionreductionapp.ui.theme.DarkSurface
@@ -480,15 +479,7 @@ fun LoginScreen(
                             authViewModel.login(email, password) { result ->
                                 when (result) {
                                     is AuthResult.Success -> {
-                                        scope.launch {
-                                            // Sync AppDataStore for downstream screens
-                                            AppDataStore.isLoggedIn.value = true
-                                            AppDataStore.userName.value =
-                                                email.substringBefore("@")
-                                                    .replaceFirstChar { it.uppercase() }
-                                            AppDataStore.saveToPrefs(context)
-                                            onLoginSuccess()
-                                        }
+                                        onLoginSuccess()
                                     }
                                     is AuthResult.EmailConfirmationRequired -> {
                                         scope.launch {
@@ -1054,12 +1045,7 @@ fun RegisterScreen(
                             authViewModel.register(name, email, password) { result ->
                                 when (result) {
                                     is AuthResult.Success -> {
-                                        scope.launch {
-                                            AppDataStore.isLoggedIn.value = true
-                                            AppDataStore.userName.value = name
-                                            AppDataStore.saveToPrefs(context)
-                                            onRegisterSuccess()
-                                        }
+                                        onRegisterSuccess()
                                     }
                                     is AuthResult.EmailConfirmationRequired -> {
                                         scope.launch {

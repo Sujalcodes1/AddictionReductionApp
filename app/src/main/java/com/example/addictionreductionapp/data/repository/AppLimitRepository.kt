@@ -53,6 +53,9 @@ class AppLimitRepository @Inject constructor(
     suspend fun getSelectedAppsOnce(): List<AppLimitEntity> =
         appLimitDao.getSelectedAppsOnce()
 
+    suspend fun getAllAppsOnce(): List<AppLimitEntity> =
+        appLimitDao.getAllAppsOnce()
+
     /** Live count of selected (monitored) apps. */
     fun getSelectedAppCount(): Flow<Int> = appLimitDao.getSelectedAppCount()
 

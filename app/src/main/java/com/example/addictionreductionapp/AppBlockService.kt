@@ -1,15 +1,25 @@
 package com.example.addictionreductionapp
 
 import android.accessibilityservice.AccessibilityService
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.example.addictionreductionapp.data.AppDataStore
-import com.example.addictionreductionapp.repository.AppUsageRepository
+import androidx.core.app.NotificationCompat
+import com.example.addictionreductionapp.data.repository.AppLimitRepository
+import com.example.addictionreductionapp.data.repository.UserProfileRepository
+import com.example.addictionreductionapp.data.repository.AppUsageRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,10 +37,9 @@ import javax.inject.Inject
  * scheduled block window is active.
  *
  * ## Data source
- * App limits and focus mode state are read from [AppDataStore] (SharedPreferences),
+ * App limits and focus mode state are read from [UserProfileRepository] (Room),
  * which is the same source the UI ([AppBlockerScreen], [HomeScreen]) writes to.
- * Daily usage totals are read from [AppUsageRepository] (Room), which is populated
- * by [AppUsageTrackingService].
+ * Daily usage totals are tracked and written to [AppUsageRepository] (Room) directly within this service.
  *
  * ## Blocking flow
  * 1. [onAccessibilityEvent] fires when any window comes to the foreground.
@@ -45,17 +54,24 @@ class AppBlockService : AccessibilityService() {
     @Inject
     lateinit var appUsageRepository: AppUsageRepository
 
+    @Inject
+    lateinit var appLimitRepository: AppLimitRepository
+
+    @Inject
+    lateinit var userProfileRepository: UserProfileRepository
+
+    @Inject
+    lateinit var reductionPlanRepository: com.example.addictionreductionapp.data.repository.ReductionPlanRepository
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
         private const val TAG = "AppBlockService"
-
-        /** Minimum ms between two block actions for the same package. */
         private const val BLOCK_COOLDOWN_MS = 5_000L
-
-        /** How often the polling loop fires. */
         private const val POLL_INTERVAL_MS = 2_000L
-
+        private const val MIN_SESSION_DURATION_MS = 3_000L
+        private const val NOTIFICATION_ID = 2002
+        private const val CHANNEL_ID = "accessibility_service"
         private val DATE_FMT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     }
 
@@ -64,6 +80,16 @@ class AppBlockService : AccessibilityService() {
     private var activePackageStartElapsed: Long = 0L
     private var lastBlockedPackage: String? = null
     private var lastBlockedTime: Long = 0L
+    private var sessionStartWallMs: Long = 0L
+
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                Log.d(TAG, "Screen off detected — flushing current session")
+                flushCurrentSession()
+            }
+        }
+    }
 
     // ── Packages that must NEVER be blocked ──────────────────────────────────
     private val systemPackageWhitelist = setOf(
@@ -89,6 +115,11 @@ class AppBlockService : AccessibilityService() {
     // ── Background polling loop ───────────────────────────────────────────────
     private val checkRunnable = object : Runnable {
         override fun run() {
+            val km = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+            if (km?.isKeyguardLocked == true) {
+                handler.postDelayed(this, POLL_INTERVAL_MS)
+                return
+            }
             checkCurrentAppUsage()
             handler.postDelayed(this, POLL_INTERVAL_MS)
         }
@@ -99,18 +130,96 @@ class AppBlockService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "AppBlockService CONNECTED — polling every ${POLL_INTERVAL_MS}ms")
+
+        // Persistent notification — prevents Android from killing this service (M10)
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, buildServiceNotification())
+
         handler.post(checkRunnable)
+
+        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        registerReceiver(screenOffReceiver, filter)
+    }
+
+    /**
+     * Called when Android unbinds the accessibility service (e.g., user toggles
+     * accessibility off in Settings). Attempt recovery by scheduling a health
+     * check notification that guides the user back to settings.
+     */
+    override fun onUnbind(intent: Intent?): Boolean {
+        Log.w(TAG, "AppBlockService UNBOUND — accessibility may have been disabled")
+        flushCurrentSession()
+        handler.removeCallbacks(checkRunnable)
+        try { unregisterReceiver(screenOffReceiver) } catch (_: Exception) {}
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        // Schedule an immediate health check to alert the user
+        AccessibilityHealthChecker.scheduleImmediate(applicationContext)
+        return super.onUnbind(intent)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "App Monitoring",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "SmartFocus is monitoring app usage in the background"
+                setShowBadge(false)
+            }
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun buildServiceNotification(): android.app.Notification {
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("SmartFocus Active")
+            .setContentText("Monitoring app usage to help you stay focused")
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pendingIntent)
+            .build()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
-        if (isSystemPackage(pkg)) return
+        if (isSystemPackage(pkg)) {
+            flushCurrentSession()
+            return
+        }
 
-        if (pkg != lastActivePackage) {
-            Log.d(TAG, "Foreground changed: $pkg")
-            lastActivePackage = pkg
+        // Confirm foreground package with USM to avoid overlays
+        val confirmedPkg = confirmForegroundPackage(pkg) ?: return
+
+        if (confirmedPkg != lastActivePackage) {
+            Log.d(TAG, "Foreground changed: $confirmedPkg (Accessibility event: $pkg)")
+
+            // Flush the previous app's session
+            lastActivePackage?.let { prevPkg ->
+                val durationMs = SystemClock.elapsedRealtime() - activePackageStartElapsed
+                if (durationMs >= MIN_SESSION_DURATION_MS) {
+                    persistSessionAsync(
+                        packageName = prevPkg,
+                        sessionStartWall = sessionStartWallMs,
+                        sessionEndWall = System.currentTimeMillis(),
+                        durationMs = durationMs
+                    )
+                }
+            }
+
+            lastActivePackage = confirmedPkg
             activePackageStartElapsed = SystemClock.elapsedRealtime()
+            sessionStartWallMs = System.currentTimeMillis()
         }
 
         // Immediate check on foreground change (don't wait for poll)
@@ -136,76 +245,92 @@ class AppBlockService : AccessibilityService() {
 
         serviceScope.launch {
             try {
-                // ── Read app config from AppDataStore (SharedPreferences) ──────
-                // AppDataStore is the authoritative config source — the UI writes there.
-                val prefs = getSharedPreferences("regain_prefs", Context.MODE_PRIVATE)
-                val isSelected = prefs.getBoolean("${packageName}_selected", false)
-                val isWhitelisted = prefs.getBoolean("${packageName}_whitelisted", false)
+                val profile = userProfileRepository.getProfile()
+                val focusActive = profile?.isFocusModeActive ?: false
 
-                Log.d(TAG, "  isSelected=$isSelected, isWhitelisted=$isWhitelisted")
-
-                if (!isSelected) {
-                    Log.d(TAG, "  Skip — $packageName not selected for monitoring")
-                    return@launch
-                }
-                if (isWhitelisted) {
+                val appConfig = appLimitRepository.getAppByPackageOnce(packageName)
+                if (appConfig != null && appConfig.isWhitelisted) {
                     Log.d(TAG, "  Skip — $packageName is whitelisted")
                     return@launch
                 }
 
-                val focusActive = prefs.getBoolean("focus_mode_active", false)
-                val limitMinutes = prefs.getInt("${packageName}_limit", 60)
-                val scheduleStart = prefs.getInt("${packageName}_schedule_start", -1)
-                val scheduleEnd = prefs.getInt("${packageName}_schedule_end", -1)
                 val appName = getAppNameForPackage(packageName)
 
-                Log.d(TAG, "  focusActive=$focusActive, limitMinutes=$limitMinutes, schedule=[$scheduleStart,$scheduleEnd]")
-
                 // ── Priority 1: Scheduled block window ────────────────────────
-                if (scheduleStart >= 0 && scheduleEnd >= 0) {
-                    val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-                    val inSchedule = if (scheduleStart <= scheduleEnd) {
-                        currentHour in scheduleStart until scheduleEnd
-                    } else {
-                        currentHour >= scheduleStart || currentHour < scheduleEnd
-                    }
-                    if (inSchedule) {
-                        Log.i(TAG, "LIMIT REACHED — $packageName in scheduled block window ($scheduleStart:00–$scheduleEnd:00)")
-                        withContext(Dispatchers.Main) {
-                            triggerBlock(packageName, appName, "schedule")
+                if (appConfig != null) {
+                    val scheduleStart = appConfig.blockScheduleStart
+                    val scheduleEnd = appConfig.blockScheduleEnd
+                    if (scheduleStart >= 0 && scheduleEnd >= 0) {
+                        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                        val inSchedule = if (scheduleStart <= scheduleEnd) {
+                            currentHour in scheduleStart until scheduleEnd
+                        } else {
+                            currentHour >= scheduleStart || currentHour < scheduleEnd
                         }
-                        return@launch
+                        if (inSchedule) {
+                            Log.i(TAG, "LIMIT REACHED — $packageName in scheduled block window ($scheduleStart:00–$scheduleEnd:00)")
+                            withContext(Dispatchers.Main) {
+                                triggerBlock(packageName, appName, "schedule")
+                            }
+                            return@launch
+                        }
                     }
                 }
 
                 // ── Priority 2: Focus Mode active ─────────────────────────────
                 if (focusActive) {
-                    Log.i(TAG, "LIMIT REACHED — $packageName blocked by focus mode")
-                    withContext(Dispatchers.Main) {
-                        triggerBlock(packageName, appName, "focus")
+                    if (appConfig != null && appConfig.isSelected) {
+                        Log.i(TAG, "LIMIT REACHED — $packageName blocked by focus mode")
+                        withContext(Dispatchers.Main) {
+                            triggerBlock(packageName, appName, "focus")
+                        }
+                        return@launch
                     }
-                    return@launch
                 }
 
-                // ── Priority 3: Daily usage limit exceeded ────────────────────
-                val today = DATE_FMT.format(Date())
-                val savedUsage = appUsageRepository.getUsageForAppOnDate(packageName, today)
-                val savedMinutes = savedUsage?.usageMinutes ?: 0
-                // Add live untracked time for the current active session
-                val liveSessionMs = if (packageName == lastActivePackage && activePackageStartElapsed > 0L) {
-                    SystemClock.elapsedRealtime() - activePackageStartElapsed
-                } else 0L
-                val totalMinutes = savedMinutes + (liveSessionMs / 60_000L).toInt()
+                // ── Priority 3: Smart Reduction Category Limit ────────────────
+                val category = com.example.addictionreductionapp.utils.AppCategoryResolver.resolveCategory(packageName)
+                val activePlans = reductionPlanRepository.getActive()
+                val plan = activePlans.find { it.category.equals(category, ignoreCase = true) && it.isActive }
+                if (plan != null) {
+                    val today = DATE_FMT.format(Date())
+                    val categoryMinutes = appUsageRepository.getTotalMinutesForCategory(category, today)
+                    val liveSessionMs = if (packageName == lastActivePackage && activePackageStartElapsed > 0L) {
+                        SystemClock.elapsedRealtime() - activePackageStartElapsed
+                    } else 0L
+                    val totalCategoryMinutes = categoryMinutes + (liveSessionMs / 60_000L).toInt()
 
-                Log.d(TAG, "  Current usage fetched: savedMinutes=$savedMinutes, liveSessionMs=${liveSessionMs}ms, totalMinutes=$totalMinutes / $limitMinutes")
+                    Log.d(TAG, "  Smart Reduction Category check: category=$category usage=$totalCategoryMinutes target=${plan.currentTarget}")
 
-                if (totalMinutes >= limitMinutes) {
-                    Log.i(TAG, "LIMIT REACHED — $packageName: ${totalMinutes}m >= ${limitMinutes}m limit. Blocking triggered.")
-                    withContext(Dispatchers.Main) {
-                        triggerBlock(packageName, appName, "limit")
+                    if (totalCategoryMinutes >= plan.currentTarget) {
+                        Log.i(TAG, "SMART REDUCTION LIMIT REACHED — Category $category: ${totalCategoryMinutes}m >= ${plan.currentTarget}m target. Blocking triggered.")
+                        withContext(Dispatchers.Main) {
+                            triggerBlock(packageName, appName, "limit")
+                        }
+                        return@launch
                     }
-                } else {
-                    Log.d(TAG, "  $packageName within limit: ${totalMinutes}m / ${limitMinutes}m")
+                }
+
+                // ── Priority 4: Daily usage limit exceeded ────────────────────
+                if (appConfig != null && appConfig.isSelected) {
+                    val limitMinutes = appConfig.limitMinutes
+                    val today = DATE_FMT.format(Date())
+                    val savedUsage = appUsageRepository.getUsageForAppOnDate(packageName, today)
+                    val savedMinutes = savedUsage?.usageMinutes ?: 0
+                    val liveSessionMs = if (packageName == lastActivePackage && activePackageStartElapsed > 0L) {
+                        SystemClock.elapsedRealtime() - activePackageStartElapsed
+                    } else 0L
+                    val totalMinutes = savedMinutes + (liveSessionMs / 60_000L).toInt()
+
+                    Log.d(TAG, "  App limit check: savedMinutes=$savedMinutes, liveSessionMs=${liveSessionMs}ms, totalMinutes=$totalMinutes / $limitMinutes")
+
+                    if (totalMinutes >= limitMinutes) {
+                        Log.i(TAG, "LIMIT REACHED — $packageName: ${totalMinutes}m >= ${limitMinutes}m limit. Blocking triggered.")
+                        withContext(Dispatchers.Main) {
+                            triggerBlock(packageName, appName, "limit")
+                        }
+                        return@launch
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in checkCurrentAppUsage for $packageName", e)
@@ -221,7 +346,6 @@ class AppBlockService : AccessibilityService() {
     private fun triggerBlock(packageName: String, appName: String, reason: String) {
         lastBlockedPackage = packageName
         lastBlockedTime = System.currentTimeMillis()
-        // Clear so the polling loop doesn't re-trigger while block screen shows
         lastActivePackage = null
 
         Log.i(TAG, "BLOCKING TRIGGERED — package=$packageName reason=$reason")
@@ -230,9 +354,22 @@ class AppBlockService : AccessibilityService() {
         performGlobalAction(GLOBAL_ACTION_HOME)
         Log.d(TAG, "  performGlobalAction(HOME) called")
 
-        // 2. After a short delay, bring MainActivity to foreground with block screen
+        // 2. Launch overlay service to persist the block
         handler.postDelayed({
             try {
+                val overlayIntent = Intent(this, BlockOverlayService::class.java).apply {
+                    putExtra(BlockOverlayService.EXTRA_APP_NAME, appName)
+                    putExtra(BlockOverlayService.EXTRA_REASON, reason)
+                }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    startForegroundService(overlayIntent)
+                } else {
+                    startService(overlayIntent)
+                }
+                Log.i(TAG, "OVERLAY SERVICE STARTED — BlockOverlayService launched for $appName ($reason)")
+            } catch (e: Exception) {
+                Log.e(TAG, "ERROR — Failed to launch overlay service", e)
+                // Fallback: launch MainActivity block screen
                 val intent = Intent(this, MainActivity::class.java).apply {
                     addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -244,9 +381,6 @@ class AppBlockService : AccessibilityService() {
                     putExtra("block_reason", reason)
                 }
                 startActivity(intent)
-                Log.i(TAG, "OVERLAY LAUNCHED — MainActivity started with block screen for $appName ($reason)")
-            } catch (e: Exception) {
-                Log.e(TAG, "ERROR — Failed to launch block screen overlay", e)
             }
         }, 400L)
     }
@@ -272,14 +406,102 @@ class AppBlockService : AccessibilityService() {
         else -> packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() }
     }
 
+    private fun flushCurrentSession() {
+        val pkg = lastActivePackage ?: return
+        val nowWall = System.currentTimeMillis()
+        val durationMs = SystemClock.elapsedRealtime() - activePackageStartElapsed
+        if (durationMs >= MIN_SESSION_DURATION_MS) {
+            persistSessionAsync(
+                packageName = pkg,
+                sessionStartWall = sessionStartWallMs,
+                sessionEndWall = nowWall,
+                durationMs = durationMs
+            )
+        }
+        lastActivePackage = null
+    }
+
+    private fun persistSessionAsync(
+        packageName: String,
+        sessionStartWall: Long,
+        sessionEndWall: Long,
+        durationMs: Long
+    ) {
+        serviceScope.launch {
+            try {
+                val durationMinutes = Math.max(1, Math.ceil(durationMs / 60_000.0).toInt())
+                val usageDate = DATE_FMT.format(Date(sessionStartWall))
+
+                Log.d(TAG, "Persisting $durationMinutes minutes for package $packageName")
+
+                val appName = getAppNameForPackage(packageName)
+                val category = com.example.addictionreductionapp.utils.AppCategoryResolver.resolveCategory(packageName)
+
+                appUsageRepository.persistSession(
+                    packageName = packageName,
+                    appName = appName,
+                    category = category,
+                    sessionStartWall = sessionStartWall,
+                    sessionEndWall = sessionEndWall,
+                    durationMinutes = durationMinutes,
+                    usageDate = usageDate
+                )
+                Log.i(TAG, "Room insert/update SUCCESS for $packageName: added ${durationMinutes}m")
+            } catch (e: Exception) {
+                Log.e(TAG, "Room insert/update FAILURE for $packageName", e)
+            }
+        }
+    }
+
+    private fun confirmForegroundPackage(candidatePackage: String): String? {
+        val usm = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE)
+            as? UsageStatsManager ?: return candidatePackage
+
+        val now = System.currentTimeMillis()
+        val lookbackStart = now - 3_000L
+
+        return try {
+            val events = usm.queryEvents(lookbackStart, now)
+            val event = UsageEvents.Event()
+            var lastResumedPackage: String? = null
+            var hasEvents = false
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+                    lastResumedPackage = event.packageName
+                    hasEvents = true
+                }
+            }
+
+            if (!hasEvents) {
+                return candidatePackage
+            }
+
+            if (lastResumedPackage == candidatePackage) {
+                candidatePackage
+            } else {
+                null
+            }
+        } catch (e: SecurityException) {
+            candidatePackage
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(checkRunnable)
+        try { unregisterReceiver(screenOffReceiver) } catch (_: Exception) {}
+        flushCurrentSession()
+        stopForeground(STOP_FOREGROUND_REMOVE)
         serviceScope.cancel()
         Log.i(TAG, "AppBlockService DESTROYED")
     }
 
     override fun onInterrupt() {
         Log.w(TAG, "AppBlockService INTERRUPTED")
+        flushCurrentSession()
     }
 }

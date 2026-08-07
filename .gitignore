@@ -13,3 +13,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+.kotlin/
+build_error_utf8.log
+/docs
+
+# Release signing keystore — NEVER commit
+*.keystore
+*.jks

@@ -56,6 +56,9 @@ interface AppLimitDao {
     @Query("SELECT * FROM app_limits WHERE is_selected = 1")
     suspend fun getSelectedAppsOnce(): List<AppLimitEntity>
 
+    @Query("SELECT * FROM app_limits")
+    suspend fun getAllAppsOnce(): List<AppLimitEntity>
+
     // ── Writes ────────────────────────────────────────────────────────────────
 
     /**

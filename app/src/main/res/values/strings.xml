@@ -2,4 +2,5 @@
     <string name="app_name">Smart Focus</string>
     <string name="accessibility_description">Monitors app usage to help reduce addiction by blocking apps when daily limits are reached.</string>
     <string name="usage_tracking_accessibility_description">Automatically tracks which apps you use and for how long, so SmartFocus can show you accurate daily screen-time insights. No screen content is ever read.</string>
+    <string name="privacy_policy_url">https://sujalcodes1.github.io/smartfocus-privacy/</string>
 </resources>

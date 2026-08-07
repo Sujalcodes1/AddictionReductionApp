@@ -2,7 +2,7 @@ package com.example.addictionreductionapp.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.addictionreductionapp.repository.AuthRepository
+import com.example.addictionreductionapp.data.repository.AuthRepository
 import com.example.addictionreductionapp.utils.AuthResult
 import com.example.addictionreductionapp.utils.AuthState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -76,6 +76,15 @@ class AuthViewModel @Inject constructor(
                 is AuthResult.Failure -> AuthState.Error(result.message)
             }
             onResult(result)
+        }
+    }
+
+    fun deleteAccount(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            val success = authRepository.deleteAccount()
+            _authState.value = AuthState.Unauthenticated
+            onResult(success)
         }
     }
 }

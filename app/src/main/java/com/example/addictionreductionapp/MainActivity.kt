@@ -6,19 +6,23 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import dagger.hilt.android.AndroidEntryPoint
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +34,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -49,19 +54,26 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -77,33 +89,41 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
-import com.example.addictionreductionapp.data.AppDataStore
+import com.example.addictionreductionapp.data.DEFAULT_APPS
+import com.example.addictionreductionapp.screens.BlockScreen
 import com.example.addictionreductionapp.screens.AICoachScreen
 import com.example.addictionreductionapp.screens.AnalyticsScreen
 import com.example.addictionreductionapp.screens.AppBlockerScreen
-import com.example.addictionreductionapp.screens.DbDebugScreen
 import com.example.addictionreductionapp.screens.FocusTimerScreen
-import com.example.addictionreductionapp.screens.TimerScreen
+import com.example.addictionreductionapp.screens.GoalsScreen
 import com.example.addictionreductionapp.screens.HomeScreen
 import com.example.addictionreductionapp.screens.OnboardingScreen
+import com.example.addictionreductionapp.screens.PermissionScreen
+import com.example.addictionreductionapp.screens.PrivacyPolicyScreen
 import com.example.addictionreductionapp.screens.ProfileScreen
+import com.example.addictionreductionapp.screens.RoadmapScreen
+import com.example.addictionreductionapp.screens.SmartReductionSetupScreen
+import com.example.addictionreductionapp.screens.BlockScreen
+import com.example.addictionreductionapp.screens.BottomNavigationBar
 import com.example.addictionreductionapp.screens.LoginScreen
 import com.example.addictionreductionapp.screens.RegisterScreen
 import com.example.addictionreductionapp.ui.theme.DarkBackground
+import com.example.addictionreductionapp.ui.theme.DarkCard
+import com.example.addictionreductionapp.ui.theme.DarkCardLight
 import com.example.addictionreductionapp.ui.theme.ErrorRed
 import com.example.addictionreductionapp.ui.theme.RegainOrange
 import com.example.addictionreductionapp.ui.theme.RegainTeal
 import com.example.addictionreductionapp.ui.theme.RegainTheme
+import com.example.addictionreductionapp.ui.theme.SuccessGreen
 import com.example.addictionreductionapp.ui.theme.TextGray
 import com.example.addictionreductionapp.ui.theme.TextWhite
-import java.util.Calendar
-import java.util.concurrent.TimeUnit
 
 import com.example.addictionreductionapp.data.repository.SnapshotReconciliationManager
+import com.example.addictionreductionapp.data.repository.UserProfileRepository
+import com.example.addictionreductionapp.data.local.entities.UserProfileEntity
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -112,9 +132,18 @@ class MainActivity : ComponentActivity() {
     private var blockedAppName = mutableStateOf("")
     private var blockReason = mutableStateOf("")
     private var deepLinkUri = mutableStateOf<String?>(null)
+    private var prefsLoaded = mutableStateOf(false)
 
     @Inject
     lateinit var reconciliationManager: SnapshotReconciliationManager
+
+    @Inject
+    lateinit var appLimitRepository: com.example.addictionreductionapp.data.repository.AppLimitRepository
+
+    @Inject
+    lateinit var userProfileRepository: UserProfileRepository
+
+    private var profileSnapshot: UserProfileEntity? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -125,26 +154,59 @@ class MainActivity : ComponentActivity() {
         }
         
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            AppDataStore.loadFromPrefs(this@MainActivity)
             val sessionManager = com.example.addictionreductionapp.utils.SessionManager(this@MainActivity)
-            if (sessionManager.getSession() != null) {
-                AppDataStore.isLoggedIn.value = true
+            val isLoggedIn = sessionManager.isLoggedIn()
+
+            // Load profile from Room (single source of truth — M3)
+            var profile = userProfileRepository.getProfile()
+            if (profile == null) {
+                profile = UserProfileEntity()
+                userProfileRepository.upsert(profile)
+            }
+            if (isLoggedIn && !profile.isLoggedIn) {
+                userProfileRepository.upsert(profile.copy(isLoggedIn = true))
+                profile = profile.copy(isLoggedIn = true)
+            }
+            profileSnapshot = profile
+
+            // Seed default apps if database is empty
+            val allApps = appLimitRepository.getAllAppsOnce()
+            if (allApps.isEmpty()) {
+                android.util.Log.d("ConfigMigration", "App blocker database is empty. Seeding defaults...")
+                try {
+                    val entities = DEFAULT_APPS.map { app ->
+                        com.example.addictionreductionapp.data.local.entities.AppLimitEntity(
+                            packageName = app.packageName,
+                            appName = app.name,
+                            isSelected = app.isSelected,
+                            limitMinutes = app.limitMinutes,
+                            isLocked = app.isLocked,
+                            blockScheduleStart = app.blockScheduleStart,
+                            blockScheduleEnd = app.blockScheduleEnd,
+                            isWhitelisted = app.isWhitelisted
+                        )
+                    }
+                    appLimitRepository.upsertAll(entities)
+                    android.util.Log.d("ConfigMigration", "Seeding complete. ${entities.size} apps seeded.")
+                } catch (e: Exception) {
+                    android.util.Log.e("ConfigMigration", "Seeding failed: ${e.message}", e)
+                }
             }
 
             // One-time snapshot rebuild safety gate
-            val prefs = getSharedPreferences("regain_prefs", android.content.Context.MODE_PRIVATE)
-            val rebuildCompleted = prefs.getBoolean("snapshot_rebuild_completed", false)
+            val snapshotPrefs = getSharedPreferences("snapshot_prefs", android.content.Context.MODE_PRIVATE)
+            val rebuildCompleted = snapshotPrefs.getBoolean("snapshot_rebuild_completed", false)
             if (!rebuildCompleted) {
-                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=false — running one-time rebuild.")
+                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=false â€” running one-time rebuild.")
                 try {
                     reconciliationManager.rebuildAllSnapshots(this@MainActivity)
-                    prefs.edit().putBoolean("snapshot_rebuild_completed", true).apply()
+                    snapshotPrefs.edit().putBoolean("snapshot_rebuild_completed", true).apply()
                     android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed flag set to true.")
                 } catch (e: Exception) {
                     android.util.Log.e("SnapshotRebuild", "Rebuild failed: ${e.message}", e)
                 }
             } else {
-                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=true — skipping rebuild.")
+                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=true â€” skipping rebuild.")
             }
 
             // Perform lightweight startup reconciliation for any new missing dates
@@ -153,13 +215,18 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+
+            // Signal that prefs are fully loaded so NavHost can use the correct startDestination
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                prefsLoaded.value = true
+            }
         }
         
         isBlockTriggered.value = intent?.getBooleanExtra("show_block_screen", false) ?: false
         blockedAppName.value = intent?.getStringExtra("blocked_app_name") ?: ""
         blockReason.value = intent?.getStringExtra("block_reason") ?: ""
 
-        // FIX 2 — Full screen: hide status bar
+        // FIX 2 â€” Full screen: hide status bar
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
         windowInsetsController?.hide(WindowInsetsCompat.Type.statusBars())
@@ -174,7 +241,30 @@ class MainActivity : ComponentActivity() {
                         blockedAppName = blockedAppName.value,
                         blockReason = blockReason.value,
                         deepLinkUri = deepLinkUri.value,
+                        prefsLoaded = prefsLoaded.value,
+                        isLoggedIn = profileSnapshot?.isLoggedIn ?: false,
+                        hasCompletedOnboarding = profileSnapshot?.hasCompletedOnboarding ?: false,
+                        hasCompletedPermissionsScreen = profileSnapshot?.hasCompletedPermissionsScreen ?: false,
+                        hasCompletedSmartReductionSetup = profileSnapshot?.hasCompletedSmartReductionSetup ?: false,
                         onDeepLinkHandled = { deepLinkUri.value = null },
+                        onOnboardingCompleted = {
+                            profileSnapshot = profileSnapshot?.copy(hasCompletedOnboarding = true)
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                userProfileRepository.upsert(profileSnapshot!!)
+                            }
+                        },
+                        onPermissionsCompleted = {
+                            profileSnapshot = profileSnapshot?.copy(hasCompletedPermissionsScreen = true)
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                userProfileRepository.upsert(profileSnapshot!!)
+                            }
+                        },
+                        onSmartReductionCompleted = {
+                            profileSnapshot = profileSnapshot?.copy(hasCompletedSmartReductionSetup = true)
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                userProfileRepository.upsert(profileSnapshot!!)
+                            }
+                        },
                         onBlockShown = {
                             isBlockTriggered.value = false
                             blockedAppName.value = ""
@@ -199,69 +289,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun scheduleNotifications() {
-        NotificationHelper.createChannels(this)
-        val workManager = WorkManager.getInstance(this)
-
-        val now = Calendar.getInstance()
-        
-        // Daily Report: 24h, 9 PM
-        val dailyTarget = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 21)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-        }
-        if (now.after(dailyTarget)) {
-            dailyTarget.add(Calendar.DAY_OF_YEAR, 1)
-        }
-        val dailyDelay = dailyTarget.timeInMillis - now.timeInMillis
-        val dailyRequest = PeriodicWorkRequestBuilder<ReportWorker>(24, TimeUnit.HOURS)
-            .setInitialDelay(dailyDelay, TimeUnit.MILLISECONDS)
-            .setInputData(workDataOf("report_type" to "daily"))
-            .build()
-        workManager.enqueueUniquePeriodicWork("daily_report", ExistingPeriodicWorkPolicy.KEEP, dailyRequest)
-
-        // Weekly Report: 7 days, 9 AM
-        val weeklyTarget = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 9)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-        }
-        if (now.after(weeklyTarget)) {
-            weeklyTarget.add(Calendar.DAY_OF_YEAR, 1)
-        }
-        val weeklyDelay = weeklyTarget.timeInMillis - now.timeInMillis
-        val weeklyRequest = PeriodicWorkRequestBuilder<ReportWorker>(7, TimeUnit.DAYS)
-            .setInitialDelay(weeklyDelay, TimeUnit.MILLISECONDS)
-            .setInputData(workDataOf("report_type" to "weekly"))
-            .build()
-        workManager.enqueueUniquePeriodicWork("weekly_report", ExistingPeriodicWorkPolicy.KEEP, weeklyRequest)
-
-        // Monthly Report: 30 days
-        val monthlyRequest = PeriodicWorkRequestBuilder<ReportWorker>(30, TimeUnit.DAYS)
-            .setInputData(workDataOf("report_type" to "monthly"))
-            .build()
-        workManager.enqueueUniquePeriodicWork("monthly_report", ExistingPeriodicWorkPolicy.KEEP, monthlyRequest)
-
-        // Hourly Nudge: 1 hour
-        val nudgeRequest = PeriodicWorkRequestBuilder<NudgeWorker>(1, TimeUnit.HOURS)
-            .build()
-        workManager.enqueueUniquePeriodicWork("hourly_nudge", ExistingPeriodicWorkPolicy.KEEP, nudgeRequest)
-        
-        // Daily Behavior Snapshot Generation (Safety Net): 24h, 11:55 PM
-        val snapshotTarget = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 23)
-            set(Calendar.MINUTE, 55)
-            set(Calendar.SECOND, 0)
-        }
-        if (now.after(snapshotTarget)) {
-            snapshotTarget.add(Calendar.DAY_OF_YEAR, 1)
-        }
-        val snapshotDelay = snapshotTarget.timeInMillis - now.timeInMillis
-        val snapshotRequest = PeriodicWorkRequestBuilder<DailySnapshotWorker>(24, TimeUnit.HOURS)
-            .setInitialDelay(snapshotDelay, TimeUnit.MILLISECONDS)
-            .build()
-        workManager.enqueueUniquePeriodicWork("daily_snapshot_generation", ExistingPeriodicWorkPolicy.KEEP, snapshotRequest)
+        WorkScheduler.scheduleAll(this)
     }
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface InterventionRepositoryEntryPoint {
+    fun interventionRepository(): com.example.addictionreductionapp.data.repository.InterventionRepository
 }
 
 @Composable
@@ -270,7 +305,15 @@ fun AppRoot(
     blockedAppName: String,
     blockReason: String,
     deepLinkUri: String?,
+    prefsLoaded: Boolean,
+    isLoggedIn: Boolean,
+    hasCompletedOnboarding: Boolean,
+    hasCompletedPermissionsScreen: Boolean,
+    hasCompletedSmartReductionSetup: Boolean,
     onDeepLinkHandled: () -> Unit,
+    onOnboardingCompleted: () -> Unit,
+    onPermissionsCompleted: () -> Unit,
+    onSmartReductionCompleted: () -> Unit,
     onBlockShown: () -> Unit
 ) {
     val context = LocalContext.current
@@ -280,8 +323,15 @@ fun AppRoot(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = remember(navBackStackEntry) { navBackStackEntry?.destination?.route }
 
-    val showOnboarding = !AppDataStore.hasCompletedOnboarding.value
-    val isLoggedIn = AppDataStore.isLoggedIn.value
+    val showOnboarding = !hasCompletedOnboarding
+    val showPermissions = !hasCompletedPermissionsScreen
+    val showSmartReductionSetup = !hasCompletedSmartReductionSetup
+
+    // Wait until prefs are loaded before rendering any navigation
+    if (!prefsLoaded) {
+        Box(Modifier.fillMaxSize().background(DarkBackground))
+        return
+    }
 
     // Store block info for the composable to use
     var currentBlockedApp by remember { mutableStateOf("") }
@@ -302,9 +352,7 @@ fun AppRoot(
         if (deepLinkUri != null) {
             authViewModel.handleDeepLink(deepLinkUri) { result ->
                 if (result is com.example.addictionreductionapp.utils.AuthResult.Success) {
-                    AppDataStore.isLoggedIn.value = true
-                    AppDataStore.saveToPrefs(context)
-                    // If we're already on login/register, navigate to home
+                    // Login state is managed by SessionManager (encrypted prefs)
                     navController.navigate("home") {
                         popUpTo(0) { inclusive = true }
                     }
@@ -336,14 +384,19 @@ fun AppRoot(
         Box(Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
-                startDestination = if (!isLoggedIn) "login" else if (showOnboarding) "onboarding" else "home",
+                startDestination = if (!isLoggedIn) "login" else if (showOnboarding) "onboarding" else if (showPermissions) "permissions" else if (showSmartReductionSetup) "smart_reduction_setup" else "home",
                 enterTransition = { EnterTransition.None },
                 exitTransition = { ExitTransition.None }
             ) {
                 composable("login") {
                     LoginScreen(
                         onLoginSuccess = {
-                            navController.navigate(if (showOnboarding) "onboarding" else "home") {
+                            navController.navigate(
+                                if (showOnboarding) "onboarding"
+                                else if (showPermissions) "permissions"
+                                else if (showSmartReductionSetup) "smart_reduction_setup"
+                                else "home"
+                            ) {
                                 popUpTo("login") { inclusive = true }
                             }
                         },
@@ -356,7 +409,12 @@ fun AppRoot(
                 composable("register") {
                     RegisterScreen(
                         onRegisterSuccess = {
-                            navController.navigate(if (showOnboarding) "onboarding" else "home") {
+                            navController.navigate(
+                                if (showOnboarding) "onboarding"
+                                else if (showPermissions) "permissions"
+                                else if (showSmartReductionSetup) "smart_reduction_setup"
+                                else "home"
+                            ) {
                                 popUpTo("register") { inclusive = true }
                                 popUpTo("login") { inclusive = true }
                             }
@@ -370,8 +428,42 @@ fun AppRoot(
                 composable("onboarding") {
                     OnboardingScreen(
                         onComplete = {
-                            navController.navigate("home") {
+                            navController.navigate("permissions") {
                                 popUpTo("onboarding") { inclusive = true }
+                            }
+                        }
+                    )
+                }
+
+                composable("permissions") {
+                    PermissionScreen(
+                        onSkip = {
+                            onPermissionsCompleted()
+                            navController.navigate("smart_reduction_setup") {
+                                popUpTo("permissions") { inclusive = true }
+                            }
+                        },
+                        onContinue = {
+                            onPermissionsCompleted()
+                            navController.navigate("smart_reduction_setup") {
+                                popUpTo("permissions") { inclusive = true }
+                            }
+                        }
+                    )
+                }
+
+                composable("smart_reduction_setup") {
+                    SmartReductionSetupScreen(
+                        onSkip = {
+                            onSmartReductionCompleted()
+                            navController.navigate("home") {
+                                popUpTo("smart_reduction_setup") { inclusive = true }
+                            }
+                        },
+                        onComplete = {
+                            onSmartReductionCompleted()
+                            navController.navigate("home") {
+                                popUpTo("smart_reduction_setup") { inclusive = true }
                             }
                         }
                     )
@@ -381,14 +473,16 @@ fun AppRoot(
                     Box(Modifier.padding(padding)) {
                         HomeScreen(
                             onStartFocus = { navController.navigate("timer") },
-                            onNavigateToApps = { navController.navigate("app_blocker") }
+                            onNavigateToApps = { navController.navigate("app_blocker") },
+                            onNavigateToGoals = { navController.navigate("goals") },
+                            onNavigateToRoadmap = { navController.navigate("roadmap") }
                         )
                     }
                 }
 
                 composable("timer") {
                     Box(Modifier.padding(padding)) {
-                        TimerScreen()
+                        FocusTimerScreen()
                     }
                 }
 
@@ -409,14 +503,12 @@ fun AppRoot(
                     Box(Modifier.padding(padding)) {
                         ProfileScreen(
                             onNavigateToApps = { navController.navigate("app_blocker") },
+                            onNavigateToPrivacy = { navController.navigate("privacy") },
                             onLogout = {
-                                AppDataStore.isLoggedIn.value = false
-                                AppDataStore.saveToPrefs(context)
                                 navController.navigate("login") {
                                     popUpTo(0) { inclusive = true }
                                 }
-                            },
-                            onNavigateToDbDebug = { navController.navigate("db_debug") }
+                            }
                         )
                     }
                 }
@@ -426,14 +518,12 @@ fun AppRoot(
                     Box(Modifier.padding(padding)) {
                         ProfileScreen(
                             onNavigateToApps = { navController.navigate("app_blocker") },
+                            onNavigateToPrivacy = { navController.navigate("privacy") },
                             onLogout = {
-                                AppDataStore.isLoggedIn.value = false
-                                AppDataStore.saveToPrefs(context)
                                 navController.navigate("login") {
                                     popUpTo(0) { inclusive = true }
                                 }
-                            },
-                            onNavigateToDbDebug = { navController.navigate("db_debug") }
+                            }
                         )
                     }
                 }
@@ -444,19 +534,32 @@ fun AppRoot(
                     )
                 }
 
-                // ── DEBUG ONLY — Remove before shipping to production ──────────
-                composable("db_debug") {
-                    DbDebugScreen(
-                        onBack = { navController.popBackStack() }
-                    )
-                }
-                // ── END DEBUG ─────────────────────────────────────────────────
-
                 composable("block") {
                     BlockScreen(
                         appName = currentBlockedApp,
                         reason = currentBlockReason,
-                        onExit = { navController.popBackStack() }
+                        onExit = { navController.popBackStack() },
+                        onStartFocus = { navController.navigate("timer") {
+                            popUpTo(navController.graph.startDestinationId)
+                        } }
+                    )
+                }
+
+                composable("goals") {
+                    GoalsScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable("roadmap") {
+                    RoadmapScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable("privacy") {
+                    PrivacyPolicyScreen(
+                        onBack = { navController.popBackStack() }
                     )
                 }
             }
@@ -464,118 +567,12 @@ fun AppRoot(
     }
 }
 
-@Composable
-fun BlockScreen(
-    appName: String = "",
-    reason: String = "",
-    onExit: () -> Unit
-) {
-    val displayName = appName.ifEmpty { "This app" }
 
-    val (title, message, icon) = when (reason) {
-        "focus" -> Triple(
-            "Focus Mode Active",
-            "$displayName is blocked during Focus Mode",
-            Icons.Default.Shield
-        )
-        "schedule" -> Triple(
-            "Scheduled Block",
-            "$displayName is blocked during scheduled hours",
-            Icons.Default.Schedule
-        )
-        else -> Triple(
-            "Limit Reached",
-            "You've reached your $displayName limit",
-            Icons.Default.Block
-        )
-    }
 
-    val accentColor = when (reason) {
-        "focus" -> RegainTeal
-        "schedule" -> RegainOrange
-        else -> ErrorRed
-    }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(DarkBackground),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Surface(
-                modifier = Modifier.size(100.dp),
-                shape = CircleShape,
-                color = accentColor.copy(alpha = 0.15f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(24.dp))
-            Text(
-                title,
-                color = TextWhite,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                message,
-                color = TextGray,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp)
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                when (reason) {
-                    "focus" -> "Stay focused! You can do this! 💪"
-                    "schedule" -> "This app is restricted right now."
-                    else -> "Take a break and come back tomorrow!"
-                },
-                color = TextGray,
-                fontSize = 14.sp
-            )
-            Spacer(Modifier.height(32.dp))
-            val buttonColor = if (reason == "focus") RegainTeal else accentColor
-            Button(
-                onClick = onExit,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = buttonColor
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .height(48.dp)
-                    .shadow(
-                        elevation = 12.dp,
-                        shape = RoundedCornerShape(12.dp),
-                        clip = false,
-                        ambientColor = buttonColor.copy(alpha = 0.5f),
-                        spotColor = buttonColor.copy(alpha = 0.5f)
-                    ),
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = 0.dp,
-                    pressedElevation = 0.dp,
-                    focusedElevation = 0.dp,
-                    hoveredElevation = 0.dp
-                )
-            ) {
-                Text(
-                    "Return Home",
-                    color = DarkBackground,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-            }
-        }
-    }
-}
+
+
+
 
 @Composable
 fun BottomNavigationBar(navController: NavHostController) {

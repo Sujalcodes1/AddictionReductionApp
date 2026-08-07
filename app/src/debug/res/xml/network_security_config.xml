@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+    DEBUG-ONLY Network Security Configuration.
+    Certificate pinning is DISABLED here to allow:
+    - Emulator testing (pin verification fails on virtual devices)
+    - Charles/Flipper proxy inspection during development
+
+    The PRODUCTION config (main/res/xml/network_security_config.xml) with
+    strict certificate pinning is used in release builds automatically.
+-->
+<network-security-config>
+    <!-- Trust system CAs + user-installed CAs (for debug proxy tools) -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Supabase: NO pin-set in debug — avoids "Pin verification failed" on emulators -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">supabase.co</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

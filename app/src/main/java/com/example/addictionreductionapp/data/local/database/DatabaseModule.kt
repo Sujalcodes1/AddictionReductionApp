@@ -1,9 +1,12 @@
 package com.example.addictionreductionapp.data.local.database
 
 import android.content.Context
+import com.example.addictionreductionapp.data.local.dao.AchievementDao
 import com.example.addictionreductionapp.data.local.dao.AppLimitDao
 import com.example.addictionreductionapp.data.local.dao.AppUsageDao
+import com.example.addictionreductionapp.data.local.dao.ChatMessageDao
 import com.example.addictionreductionapp.data.local.dao.FocusSessionDao
+import com.example.addictionreductionapp.data.local.dao.ReductionPlanDao
 import com.example.addictionreductionapp.data.local.dao.UserProfileDao
 import dagger.Module
 import dagger.Provides
@@ -95,4 +98,24 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDailyBehaviorSnapshotDao(db: AppDatabase): com.example.addictionreductionapp.data.local.dao.DailyBehaviorSnapshotDao = db.dailyBehaviorSnapshotDao()
+
+    @Provides
+    @Singleton
+    fun provideGoalDao(db: AppDatabase): com.example.addictionreductionapp.data.local.dao.GoalDao = db.goalDao()
+
+    @Provides
+    @Singleton
+    fun provideInterventionDao(db: AppDatabase): com.example.addictionreductionapp.data.local.dao.InterventionDao = db.interventionDao()
+
+    @Provides
+    @Singleton
+    fun provideAchievementDao(db: AppDatabase): AchievementDao = db.achievementDao()
+
+    @Provides
+    @Singleton
+    fun provideChatMessageDao(db: AppDatabase): ChatMessageDao = db.chatMessageDao()
+
+    @Provides
+    @Singleton
+    fun provideReductionPlanDao(db: AppDatabase): ReductionPlanDao = db.reductionPlanDao()
 }

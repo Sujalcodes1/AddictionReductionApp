@@ -13,6 +13,7 @@ object NotificationHelper {
     const val CHANNEL_WEEKLY = "weekly_report"
     const val CHANNEL_MONTHLY = "monthly_report"
     const val CHANNEL_NUDGE = "live_nudge"
+    const val CHANNEL_LIMIT_APPROACHING = "limit_approaching"
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -40,11 +41,18 @@ object NotificationHelper {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply { description = "Hourly motivational nudges" }
 
+            val limitChannel = NotificationChannel(
+                CHANNEL_LIMIT_APPROACHING,
+                "Limit Warnings",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply { description = "Smart reduction limit approaching warnings" }
+
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(dailyChannel)
             notificationManager.createNotificationChannel(weeklyChannel)
             notificationManager.createNotificationChannel(monthlyChannel)
             notificationManager.createNotificationChannel(nudgeChannel)
+            notificationManager.createNotificationChannel(limitChannel)
         }
     }
 

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "617031270845",
+    "project_id": "smart-focus-555ed",
+    "storage_bucket": "smart-focus-555ed.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:617031270845:android:c161985f3fc3d9a14bd2d4",
+        "android_client_info": {
+          "package_name": "com.example.addictionreductionapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXV62Yquv7ENdA2E8FGU795ffg-xaAKPk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

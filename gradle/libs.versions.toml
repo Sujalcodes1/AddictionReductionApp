@@ -9,8 +9,10 @@ kotlin = "2.0.21"
 
 # ── KSP ───────────────────────────────────────────────────────────────────────
 # Format: <kotlin-version>-<ksp-version>
-# KSP 1.0.28 does NOT exist for Kotlin 2.0.21. Latest stable is 1.0.25.
-ksp = "2.0.21-1.0.25"
+# 2.0.21-1.0.25 crashes with "lateinit property cleanFilenames has not been
+# initialized" on every build (google/ksp#952). 2.0.21-1.0.28 is the latest
+# stable release for Kotlin 2.0.21.
+ksp = "2.0.21-1.0.28"
 
 # ── Core AndroidX ─────────────────────────────────────────────────────────────
 coreKtx = "1.15.0"
@@ -34,9 +36,6 @@ room = "2.6.1"
 
 # ── Coroutines ────────────────────────────────────────────────────────────────
 coroutines = "1.8.1"
-
-# ── Generative AI ─────────────────────────────────────────────────────────────
-generativeai = "0.9.0"
 
 # ── Supabase ──────────────────────────────────────────────────────────────────
 # 3.1.4: latest stable compatible with Kotlin 2.0.21 (BOM 3.2.6 requires Ktor 3.3.1 / Kotlin 2.2.x)
@@ -96,9 +95,6 @@ hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-com
 # ── Coroutines ────────────────────────────────────────────────────────────────
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 
-# ── Generative AI ─────────────────────────────────────────────────────────────
-generativeai = { group = "com.google.ai.client.generativeai", name = "generativeai", version.ref = "generativeai" }
-
 # ── Supabase ──────────────────────────────────────────────────────────────────
 # BOM: import without version; individual modules inherit from BOM
 supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
@@ -106,6 +102,8 @@ supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version
 supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
 # postgrest-kt: for user_profiles upsert on registration
 supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
+# functions-kt: for invoking Supabase Edge Functions (AI Coach proxy)
+supabase-functions = { group = "io.github.jan-tennert.supabase", name = "functions-kt" }
 
 # ── Ktor ──────────────────────────────────────────────────────────────────────
 # OkHttp engine recommended for Android (more stable than CIO on Android)

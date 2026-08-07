@@ -2,8 +2,10 @@ package com.example.addictionreductionapp.data.repository
 
 import com.example.addictionreductionapp.data.analytics.BehavioralIntelligenceEngine
 import com.example.addictionreductionapp.data.analytics.FocusScoreEngine
+import com.example.addictionreductionapp.data.analytics.GoalProgressEngine
 import com.example.addictionreductionapp.data.local.dao.AnalyticsDao
 import com.example.addictionreductionapp.data.local.dao.DailyBehaviorSnapshotDao
+import com.example.addictionreductionapp.data.local.dao.GoalDao
 import com.example.addictionreductionapp.data.local.entities.DailyBehaviorSnapshotEntity
 import com.example.addictionreductionapp.data.models.CategoryAnalytics
 import com.example.addictionreductionapp.data.models.FocusScoreDetails
@@ -21,7 +23,9 @@ class SnapshotReconciliationManager @Inject constructor(
     private val analyticsDao: AnalyticsDao,
     private val snapshotDao: DailyBehaviorSnapshotDao,
     private val focusScoreEngine: FocusScoreEngine,
-    private val behaviorEngine: BehavioralIntelligenceEngine
+    private val behaviorEngine: BehavioralIntelligenceEngine,
+    private val goalDao: GoalDao,
+    private val goalProgressEngine: GoalProgressEngine
 ) {
     suspend fun reconcileMissingSnapshots() = withContext(Dispatchers.IO) {
         val missingDates = snapshotDao.getMissingSnapshotDates()
@@ -101,6 +105,26 @@ class SnapshotReconciliationManager @Inject constructor(
 
             // 6. Save
             snapshotDao.insertSnapshot(entity)
+
+            // 7. Calculate and update goal progress (M4)
+            try {
+                val activeGoals = goalDao.getActiveGoalsOnce()
+                if (activeGoals.isNotEmpty()) {
+                    val progressUpdates = goalProgressEngine.computeGoalProgress(activeGoals, weeklyAvg, totalTime)
+                    for (goal in activeGoals) {
+                        val update = progressUpdates[goal.id]
+                        if (update != null) {
+                            goalDao.upsert(goal.copy(
+                                savedHoursTotal = update.savedHoursTotal,
+                                progress = update.progress,
+                                updatedAt = System.currentTimeMillis()
+                            ))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("SnapshotRebuild", "Failed to update goal progress: ${e.message}", e)
+            }
         }
     }
 

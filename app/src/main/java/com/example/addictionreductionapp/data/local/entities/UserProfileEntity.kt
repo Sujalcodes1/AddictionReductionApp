@@ -53,5 +53,17 @@ data class UserProfileEntity(
 
     /** True after successful login. */
     @ColumnInfo(name = "is_logged_in")
-    val isLoggedIn: Boolean = false
+    val isLoggedIn: Boolean = false,
+
+    /** True once the user has completed the permissions screen. */
+    @ColumnInfo(name = "has_completed_permissions_screen")
+    val hasCompletedPermissionsScreen: Boolean = false,
+
+    /** True once the user has completed the smart reduction setup. */
+    @ColumnInfo(name = "has_completed_smart_reduction_setup")
+    val hasCompletedSmartReductionSetup: Boolean = false,
+
+    /** Date string of the last streak processing day (YYYY-MM-DD). */
+    @ColumnInfo(name = "last_streak_date")
+    val lastStreakDate: String? = null
 )

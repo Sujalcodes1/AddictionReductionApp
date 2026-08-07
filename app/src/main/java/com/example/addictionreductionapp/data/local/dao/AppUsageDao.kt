@@ -249,4 +249,12 @@ interface AppUsageDao {
         """
     )
     suspend fun getTotalMinutesOnDate(date: String): Int
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(usage_minutes), 0) FROM app_usage
+        WHERE app_category = :category AND usage_date = :date
+        """
+    )
+    suspend fun getTotalMinutesForCategory(category: String, date: String): Int
 }

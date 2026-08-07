@@ -3,7 +3,9 @@ package com.example.addictionreductionapp.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.addictionreductionapp.data.local.entities.AppLimitEntity
+import com.example.addictionreductionapp.data.local.entities.ReductionPlanEntity
 import com.example.addictionreductionapp.data.repository.AppLimitRepository
+import com.example.addictionreductionapp.data.repository.ReductionPlanRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +35,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AppBlockerViewModel @Inject constructor(
-    private val repository: AppLimitRepository
+    private val repository: AppLimitRepository,
+    private val reductionPlanRepository: ReductionPlanRepository
 ) : ViewModel() {
 
     /**
@@ -43,6 +46,14 @@ class AppBlockerViewModel @Inject constructor(
      */
     val allApps: StateFlow<List<AppLimitEntity>> = repository
         .getAllApps()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = emptyList()
+        )
+
+    val activeReductionPlans: StateFlow<List<ReductionPlanEntity>> = reductionPlanRepository
+        .observeActive()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),

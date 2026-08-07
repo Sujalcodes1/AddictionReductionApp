@@ -22,22 +22,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.addictionreductionapp.components.*
-import com.example.addictionreductionapp.data.AppDataStore
 import com.example.addictionreductionapp.ui.theme.*
 import com.example.addictionreductionapp.utils.PermissionUtils
 import android.provider.Settings
 import android.content.Intent
 import android.net.Uri
+import android.os.PowerManager
 import kotlinx.coroutines.delay
 import java.util.*
 import java.util.concurrent.TimeUnit
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.addictionreductionapp.viewmodel.GoalsViewModel
 import com.example.addictionreductionapp.viewmodel.HomeViewModel
 
 @Composable
 fun HomeScreen(
     onStartFocus: () -> Unit,
     onNavigateToApps: () -> Unit,
+    onNavigateToGoals: () -> Unit = {},
+    onNavigateToRoadmap: () -> Unit = {},
     homeViewModel: HomeViewModel = hiltViewModel()
 ) {
     val startCompose = android.os.SystemClock.elapsedRealtime()
@@ -48,13 +51,20 @@ fun HomeScreen(
     val totalUsedMillis = uiState.totalUsedMillis
     val appsBlockedToday = uiState.appsBlockedToday
 
+    val profile by homeViewModel.profile.collectAsState()
+    val recentInterventions by homeViewModel.recentInterventions.collectAsState()
+    val reductionPlans by homeViewModel.reductionPlans.collectAsState()
+
+    val goalsViewModel: GoalsViewModel = hiltViewModel()
+    val activeGoals by goalsViewModel.activeGoals.collectAsState()
+    val dailyGoalMins = activeGoals.firstOrNull()?.targetScreenTimePerDay?.toLong() ?: uiState.totalLimitMins
+
     val totalUsedMins = TimeUnit.MILLISECONDS.toMinutes(totalUsedMillis)
-    val selectedApps = AppDataStore.apps.filter { it.isSelected }
-    val totalLimitMins = selectedApps.sumOf { it.limitMinutes }.toLong().coerceAtLeast(1L)
+    val totalLimitMins = dailyGoalMins.coerceAtLeast(1L)
     val remainingMins = (totalLimitMins - totalUsedMins).coerceAtLeast(0L)
     val usageProgress = (totalUsedMins.toFloat() / totalLimitMins.toFloat()).coerceIn(0f, 1f)
 
-    val focusScore = if (selectedApps.isNotEmpty()) {
+    val focusScore = if (uiState.hasSelectedApps) {
         ((1f - usageProgress) * 100).toInt().coerceIn(0, 100)
     } else {
         100
@@ -90,6 +100,10 @@ fun HomeScreen(
         val hasUsage = PermissionUtils.hasUsageAccess(context)
         val hasOverlay = PermissionUtils.hasOverlayPermission(context)
         val hasAccessibility = PermissionUtils.hasAccessibilityPermission(context)
+        val batteryOptWhitelisted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            pm.isIgnoringBatteryOptimizations(context.packageName)
+        } else true
 
     Column(
         Modifier
@@ -148,6 +162,42 @@ fun HomeScreen(
             }
         }
 
+        // Battery optimization warning (M10 — prevents service disabling on OEMs)
+        if (hasAccessibility && !batteryOptWhitelisted) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = WarningYellow.copy(alpha = 0.12f)),
+                border = BorderStroke(1.dp, WarningYellow.copy(alpha = 0.4f)),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.BatteryAlert, contentDescription = null, tint = WarningYellow, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Battery Optimization", color = WarningYellow, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("Battery optimization may disable app monitoring. Whitelist SmartFocus to keep it running reliably.",
+                        color = TextGray, fontSize = 12.sp, lineHeight = 16.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                                context.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                })
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = WarningYellow),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Disable Battery Optimization", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
         // Header
         Row(
             Modifier.fillMaxWidth(),
@@ -157,43 +207,49 @@ fun HomeScreen(
             Column {
                 Text("Welcome back,", color = TextGray, fontSize = 14.sp)
                 Text(
-                    AppDataStore.userName.value,
+                    profile?.userName ?: "User",
                     color = TextWhite,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
-            // Focus Score Badge
-            Surface(
-                color = DarkCard,
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, RegainTeal.copy(alpha = 0.3f))
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Focus Score Badge
+                Surface(
+                    color = DarkCard,
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, RegainTeal.copy(alpha = 0.3f)),
+                    modifier = Modifier.clickable(
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    ) { onNavigateToGoals() }
                 ) {
-                    Icon(
-                        Icons.Default.FlashOn,
-                        contentDescription = null,
-                        tint = RegainTeal,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            "FOCUS",
-                            color = TextGray,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.FlashOn,
+                            contentDescription = null,
+                            tint = RegainTeal,
+                            modifier = Modifier.size(18.dp)
                         )
-                        Text(
-                            "$focusScore%",
-                            color = TextWhite,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Spacer(Modifier.width(6.dp))
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                "FOCUS",
+                                color = TextGray,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                "$focusScore%",
+                                color = TextWhite,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -274,12 +330,11 @@ fun HomeScreen(
         Spacer(Modifier.height(28.dp))
 
         // Focus Mode Toggle Button
-        val isFocusActive = AppDataStore.isFocusModeActive.value
+        val isFocusActive = profile?.isFocusModeActive ?: false
 
         OutlinedButton(
             onClick = {
-                AppDataStore.isFocusModeActive.value = !isFocusActive
-                AppDataStore.saveToPrefs(context)
+                homeViewModel.toggleFocusMode()
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -384,9 +439,9 @@ fun HomeScreen(
             StatCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.LocalFireDepartment,
-                value = "${AppDataStore.streakCount.intValue}",
+                value = "${profile?.streakCount ?: 0}",
                 label = "Day Streak",
-                trend = if (AppDataStore.streakCount.intValue > 0) "+${AppDataStore.streakCount.intValue}" else "",
+                trend = if ((profile?.streakCount ?: 0) > 0) "+${profile?.streakCount}" else "",
                 accentColor = RegainOrange
             )
         }
@@ -404,13 +459,67 @@ fun HomeScreen(
             StatCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.CheckCircle,
-                value = "${AppDataStore.sessionsCompleted.intValue}",
+                value = "${profile?.sessionsCompleted ?: 0}",
                 label = "Sessions Done",
                 accentColor = RegainBlue
             )
         }
 
         Spacer(Modifier.height(20.dp))
+
+        if (recentInterventions.isNotEmpty()) {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = DarkCard),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.SelfImprovement,
+                        contentDescription = null,
+                        tint = RegainPurple,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "${recentInterventions.size} intervention${if (recentInterventions.size != 1) "s" else ""} today",
+                        color = TextGray,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (reductionPlans.isNotEmpty()) {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = RegainTeal.copy(alpha = 0.1f)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        "Today's Smart Reduction",
+                        color = RegainTeal,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    reductionPlans.forEach { plan ->
+                        Text(
+                            "${plan.category}: ${plan.currentTarget} min target · Day ${plan.daysActive}",
+                            color = TextGray,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
 
         // AI Buddy Card (Rega)
         Card(
@@ -459,6 +568,91 @@ fun HomeScreen(
 
         Spacer(Modifier.height(16.dp))
 
+        // Goals CTA Card
+        Card(
+            Modifier
+                .fillMaxWidth()
+                .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onNavigateToGoals() },
+            colors = CardDefaults.cardColors(containerColor = DarkCard),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, RegainTeal.copy(alpha = 0.2f))
+        ) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = RegainTeal.copy(alpha = 0.15f),
+                    shape = CircleShape,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Flag, contentDescription = null, tint = RegainTeal, modifier = Modifier.size(20.dp))
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    val baselineMins = if (reductionPlans.isNotEmpty()) {
+                        reductionPlans.sumOf { it.baselineMinutes }
+                    } else {
+                        180
+                    }
+                    val todaySavedMins = (baselineMins - totalUsedMins).coerceAtLeast(0L)
+                    val todaySavedHours = todaySavedMins / 60f
+
+                    Text(
+                        text = if (todaySavedHours > 0) {
+                            "Today's saved: ${String.format(java.util.Locale.US, "%.1f", todaySavedHours)}h toward your goals"
+                        } else {
+                            "Track progress toward your goals"
+                        },
+                        color = TextWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = if (activeGoals.isNotEmpty()) {
+                            "${activeGoals.size} active goal${if (activeGoals.size != 1) "s" else ""} in progress"
+                        } else {
+                            "Connect screen-time reduction to meaningful life outcomes"
+                        },
+                        color = TextGray,
+                        fontSize = 12.sp
+                    )
+                }
+                Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = TextGray)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Roadmap CTA
+        Card(
+            Modifier
+                .fillMaxWidth()
+                .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onNavigateToRoadmap() },
+            colors = CardDefaults.cardColors(containerColor = DarkCard),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, RegainPurple.copy(alpha = 0.2f))
+        ) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = RegainPurple.copy(alpha = 0.15f),
+                    shape = CircleShape,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.TrendingDown, contentDescription = null, tint = RegainPurple, modifier = Modifier.size(20.dp))
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Reduction Plan", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("View your weekly reduction targets", color = TextGray, fontSize = 12.sp)
+                }
+                Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = TextGray)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
         // Daily Insight
         Card(
             Modifier.fillMaxWidth(),
@@ -489,7 +683,7 @@ fun HomeScreen(
                         fontSize = 14.sp
                     )
                     Spacer(Modifier.height(2.dp))
-                    if (selectedApps.isEmpty()) {
+                    if (!uiState.hasSelectedApps) {
                         Text(
                             "No apps selected for tracking. Tap the block icon to set up app limits.",
                             color = TextGray,

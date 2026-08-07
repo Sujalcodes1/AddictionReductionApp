@@ -1,0 +1,183 @@
+﻿import java.util.Properties
+
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    // Required in Kotlin 2.x ΓÇö enables the Compose compiler Gradle plugin.
+    // This replaces the old composeOptions { kotlinCompilerExtensionVersion = "..." } block.
+    alias(libs.plugins.kotlin.compose)
+    // Required by Supabase-kt ΓÇö enables @Serializable annotation processing.
+    alias(libs.plugins.kotlin.serialization)
+    // KSP for Room + Hilt annotation processing (KAPT is not supported in Kotlin 2.x)
+    alias(libs.plugins.ksp)
+    // Hilt DI ΓÇö was incorrectly commented out; @HiltAndroidApp requires this plugin
+    alias(libs.plugins.hilt.android)
+}
+
+// ΓöÇΓöÇ Credentials: read SUPABASE_URL and SUPABASE_ANON_KEY from local.properties ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// NEVER hardcode credentials. Keys are injected into BuildConfig at compile time.
+// local.properties is in .gitignore and never committed to version control.
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
+android {
+    namespace = "com.example.addictionreductionapp"
+    compileSdk = 36  // Raised from 35: androidx.browser:1.9.0 (transitive from supabase auth-kt) requires 36.
+                     // gradle.properties already has android.suppressUnsupportedCompileSdk=36 for AGP 8.7.3 compat.
+
+    defaultConfig {
+        applicationId = "com.example.addictionreductionapp"
+        minSdk = 26  // Raised from 24: Supabase-kt 3.x native requirement; eliminates desugaring overhead
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // ΓöÇΓöÇ Supabase BuildConfig fields ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        // Read from local.properties ΓÇö never from hardcoded string literals.
+        // Usage in Kotlin: BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY
+        buildConfigField(
+            "String",
+            "SUPABASE_URL",
+            "\"${localProperties["SUPABASE_URL"] ?: ""}\""
+        )
+        buildConfigField(
+            "String",
+            "SUPABASE_ANON_KEY",
+            "\"${localProperties["SUPABASE_ANON_KEY"] ?: ""}\""
+        )
+        buildConfigField(
+            "String",
+            "GEMINI_API_KEY",
+            "\"${localProperties["GEMINI_API_KEY"] ?: ""}\""
+        )
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    buildFeatures {
+        compose = true
+        // Enables BuildConfig generation so SUPABASE_URL and SUPABASE_ANON_KEY
+        // can be read from local.properties at compile time without hardcoding.
+        buildConfig = true
+    }
+    // NOTE: Do NOT add composeOptions { kotlinCompilerExtensionVersion = "..." } here.
+    // With Kotlin 2.x + kotlin.plugin.compose, the compiler version is managed
+    // automatically by the plugin. Adding it manually causes a conflict.
+}
+
+/**
+ * KSP arguments for Room:
+ * - room.schemaLocation: exports schema JSON files so you can diff schema
+ *   changes in git and write proper Migrations.
+ * - room.incremental: skips regeneration for unchanged entities (faster builds).
+ */
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.incremental", "true")
+}
+
+// ΓöÇΓöÇ Dependency resolution overrides ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// androidx.browser:1.9.0 (transitive from supabase auth-kt) requires AGP 8.9.1.
+// This project uses AGP 8.7.3 and only uses email/password auth ΓÇö no OAuth browser
+// flows. Forcing 1.8.0 satisfies Supabase's runtime needs with the current AGP.
+configurations.all {
+    resolutionStrategy {
+        force("androidx.browser:browser:1.8.0")
+    }
+}
+
+dependencies {
+    // ΓöÇΓöÇ Core AndroidX ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+
+    // ΓöÇΓöÇ Activity ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // activity-compose provides setContent{} ΓÇö required for Compose entry point
+    implementation(libs.androidx.activity.compose)
+    // activity-ktx provides ComponentActivity.viewModels() and other KTX helpers
+    implementation(libs.androidx.activity.ktx)
+
+    // ΓöÇΓöÇ Compose BOM (manages all Compose artifact versions consistently) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    // Material Icons Extended ΓÇö provides Icons.Default.Psychology, etc.
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // ΓöÇΓöÇ Navigation ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation(libs.androidx.navigation.compose)
+
+    // ΓöÇΓöÇ Lifecycle ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+
+    // ΓöÇΓöÇ WorkManager ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // ΓöÇΓöÇ Room Persistence Library ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
+    // ΓöÇΓöÇ Hilt Dependency Injection ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    // hiltViewModel() bridge for Compose Navigation
+    implementation(libs.hilt.navigation.compose)
+
+    // ΓöÇΓöÇ Kotlin Coroutines ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation(libs.kotlinx.coroutines.android)
+
+    // ΓöÇΓöÇ Generative AI (Gemini) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation(libs.generativeai)
+
+    // ΓöÇΓöÇ Gson (used by Room TypeConverters for List<String> / List<Int>) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    // ΓöÇΓöÇ Supabase Auth + Postgrest (BOM manages versions ΓÇö no explicit version needed) ΓöÇΓöÇ
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)      // auth-kt: Supabase GoTrue v2 / Auth
+    implementation(libs.supabase.postgrest) // postgrest-kt: user_profiles upsert
+
+    // ΓöÇΓöÇ Ktor OkHttp engine (required at runtime by Supabase-kt on Android) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    implementation(libs.ktor.client.okhttp)
+
+    // ΓöÇΓöÇ Kotlinx Serialization JSON (required by Supabase-kt for data encoding) ΓöÇΓöÇΓöÇΓöÇ
+    implementation(libs.kotlinx.serialization.json)
+
+    // ΓöÇΓöÇ Jetpack Security: EncryptedSharedPreferences for auth token storage ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // Session tokens are security-sensitive ΓÇö must never live in plaintext prefs.
+    implementation(libs.security.crypto)
+
+    // ΓöÇΓöÇ Testing ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
