@@ -429,7 +429,11 @@ class AppBlockService : AccessibilityService() {
     ) {
         serviceScope.launch {
             try {
-                val durationMinutes = Math.max(1, Math.ceil(durationMs / 60_000.0).toInt())
+                val durationMinutes = (durationMs / 60_000L).toInt()
+                if (durationMinutes <= 0) {
+                    Log.d(TAG, "Skipping persist for sub-minute session (${durationMs}ms) on $packageName")
+                    return@launch
+                }
                 val usageDate = DATE_FMT.format(Date(sessionStartWall))
 
                 Log.d(TAG, "Persisting $durationMinutes minutes for package $packageName")

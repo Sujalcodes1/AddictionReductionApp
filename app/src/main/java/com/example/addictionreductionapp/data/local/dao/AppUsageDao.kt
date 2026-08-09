@@ -92,6 +92,33 @@ interface AppUsageDao {
     ): Int
 
     /**
+     * Atomically sets the exact usage stats for an app on a date.
+     * Uses SQLite ON CONFLICT to overwrite previous values with the true system metrics.
+     */
+    @Query(
+        """
+        INSERT INTO app_usage (package_name, app_name, app_category, usage_date, usage_minutes, open_count, start_timestamp, end_timestamp)
+        VALUES (:packageName, :appName, :category, :date, :minutes, :opens, :startTs, :endTs)
+        ON CONFLICT(package_name, usage_date) DO UPDATE SET
+            app_name = :appName,
+            app_category = :category,
+            usage_minutes = :minutes,
+            open_count = :opens,
+            end_timestamp = :endTs
+        """
+    )
+    suspend fun upsertDailyUsage(
+        packageName: String,
+        appName: String,
+        category: String,
+        date: String,
+        minutes: Int,
+        opens: Int,
+        startTs: Long,
+        endTs: Long
+    )
+
+    /**
      * Delete usage records older than [cutoffDate] to prevent unbounded table growth.
      *
      * Schedule this via [androidx.work.WorkManager] (e.g. weekly) using a
@@ -103,6 +130,21 @@ interface AppUsageDao {
      */
     @Query("DELETE FROM app_usage WHERE usage_date < :cutoffDate")
     suspend fun deleteOldUsageData(cutoffDate: String)
+
+    /**
+     * Deletes usage rows for SmartFocus itself, keyboards, and system launcher daemons
+     * so they never pollute behavioral analytics.
+     */
+    @Query("""
+        DELETE FROM app_usage 
+        WHERE package_name = :selfPackage 
+           OR package_name = 'com.example.addictionreductionapp'
+           OR package_name = 'com.google.android.inputmethod.latin'
+           OR package_name = 'com.android.systemui'
+           OR package_name LIKE '%.inputmethod%'
+           OR package_name LIKE 'com.android.launcher%'
+    """)
+    suspend fun cleanIgnoredPackages(selfPackage: String = "com.example.addictionreductionapp")
 
     // ── Daily reads ───────────────────────────────────────────────────────────
 

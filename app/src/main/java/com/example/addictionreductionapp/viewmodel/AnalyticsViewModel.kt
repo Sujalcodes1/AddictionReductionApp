@@ -11,15 +11,20 @@ import com.example.addictionreductionapp.data.models.FocusScore
 import com.example.addictionreductionapp.data.models.FocusScoreDetails
 import com.example.addictionreductionapp.data.models.HourlyUsagePoint
 import com.example.addictionreductionapp.data.repository.AnalyticsRepository
+import com.example.addictionreductionapp.data.repository.AppUsageRepository
 import com.example.addictionreductionapp.data.repository.HistoricalTrendsRepository
+import com.example.addictionreductionapp.data.repository.SnapshotReconciliationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -28,27 +33,63 @@ import javax.inject.Inject
 @HiltViewModel
 class AnalyticsViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
+    private val appUsageRepository: AppUsageRepository,
     private val focusScoreEngine: FocusScoreEngine,
     private val streakEngine: StreakEngine,
     private val behaviorEngine: BehavioralIntelligenceEngine,
-    private val historicalTrendsRepository: HistoricalTrendsRepository
+    private val historicalTrendsRepository: HistoricalTrendsRepository,
+    private val reconciliationManager: SnapshotReconciliationManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AnalyticsUiState(isLoading = false))
     val uiState: StateFlow<AnalyticsUiState> = _uiState.asStateFlow()
 
+    private var activeAnalyticsJob: Job? = null
+    private var lastObservedDate: String = ""
+
     init {
         android.util.Log.d("NavDebug", "AnalyticsViewModel INITIALIZED (hashCode=${hashCode()})")
-        loadRealtimeAnalytics()
+        startAnalyticsWatcher()
     }
 
-    private fun loadRealtimeAnalytics() {
-        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        val today = LocalDate.now().format(formatter)
-        val startDate7 = LocalDate.now().minusDays(7).format(formatter)
-        val startDate30 = LocalDate.now().minusDays(30).format(formatter)
+    /**
+     * Watches for midnight date transitions (00:00) and periodic real-time updates.
+     * When a new calendar day arrives, all daily metrics reset to start from scratch.
+     */
+    private fun startAnalyticsWatcher() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            while (isActive) {
+                val currentDate = LocalDate.now().format(formatter)
+                if (currentDate != lastObservedDate) {
+                    lastObservedDate = currentDate
+                    bindDateAnalytics(currentDate)
+                }
+                // Periodic background usage sync every 30 seconds
+                try {
+                    appUsageRepository.syncUsageFromSystem(daysToSync = 1)
+                } catch (_: Exception) { }
+                delay(30_000L)
+            }
+        }
+    }
 
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+    private fun bindDateAnalytics(today: String) {
+        activeAnalyticsJob?.cancel()
+        activeAnalyticsJob = viewModelScope.launch(Dispatchers.IO) {
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            val date = LocalDate.parse(today, formatter)
+            val startDate7 = date.minusDays(7).format(formatter)
+            val startDate30 = date.minusDays(30).format(formatter)
+
+            // Sync usage for the active day + past week
+            try {
+                appUsageRepository.syncUsageFromSystem(daysToSync = 7)
+                reconciliationManager.reconcileMissingSnapshots()
+            } catch (e: Exception) {
+                android.util.Log.e("AnalyticsViewModel", "Sync usage failed: ${e.message}", e)
+            }
+
             // 1. Basic Stats
             launch {
                 combine(
@@ -101,7 +142,6 @@ class AnalyticsViewModel @Inject constructor(
             }
 
             // 6. Historical Trends (7-day window)
-            // Future ML Dataset Source: subscribe to trend summaries to populate training data.
             launch {
                 historicalTrendsRepository.generateBehaviorTrendSummary(windowDays = 7)
                     .catch { }
@@ -111,7 +151,6 @@ class AnalyticsViewModel @Inject constructor(
             }
 
             // 7. Historical Trends (30-day window)
-            // Future ML Training Input: 30-day window exposes longer-term behavioral drift.
             launch {
                 historicalTrendsRepository.generateBehaviorTrendSummary(windowDays = 30)
                     .catch { }
@@ -178,28 +217,21 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Builds a list of FocusScoreDetails for the behavioral engine.
-     * Historical scores (from previous days) come first, followed by today's live score.
-     * If today's score is already present in the historical list (same day), it replaces it.
-     */
     private fun buildRecentScoreList(
         historical: List<FocusScoreDetails>,
         todayScore: FocusScoreDetails
     ): List<FocusScoreDetails> {
-        // Historical data may already contain today if the DB has been written to.
-        // Drop the last entry if it would be today's, and append the live computation.
         val previousDays = if (historical.isNotEmpty()) {
-            // The last element in the historical list is from the most recent date with data.
-            // If that's today, drop it so we use the live computation instead.
             historical.dropLast(1)
         } else {
             emptyList()
         }
         return previousDays + todayScore
     }
+
     override fun onCleared() {
         super.onCleared()
+        activeAnalyticsJob?.cancel()
         android.util.Log.d("NavDebug", "AnalyticsViewModel CLEARED (hashCode=${hashCode()})")
     }
 }
@@ -222,4 +254,3 @@ internal data class HistoricalData(
     val focusScores: List<FocusScore>,
     val focusScoreDetails: List<FocusScoreDetails>
 )
-

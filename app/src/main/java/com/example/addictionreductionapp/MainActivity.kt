@@ -143,6 +143,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var userProfileRepository: UserProfileRepository
 
+    @Inject
+    lateinit var appUsageRepository: com.example.addictionreductionapp.data.repository.AppUsageRepository
+
     private var profileSnapshot: UserProfileEntity? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -156,6 +159,13 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val sessionManager = com.example.addictionreductionapp.utils.SessionManager(this@MainActivity)
             val isLoggedIn = sessionManager.isLoggedIn()
+
+            // Sync usage stats from OS UsageStatsManager into Room
+            try {
+                appUsageRepository.syncUsageFromSystem(daysToSync = 7)
+            } catch (e: Exception) {
+                android.util.Log.e("StartupSync", "Failed to sync system usage stats: ${e.message}", e)
+            }
 
             // Load profile from Room (single source of truth — M3)
             var profile = userProfileRepository.getProfile()
@@ -197,7 +207,7 @@ class MainActivity : ComponentActivity() {
             val snapshotPrefs = getSharedPreferences("snapshot_prefs", android.content.Context.MODE_PRIVATE)
             val rebuildCompleted = snapshotPrefs.getBoolean("snapshot_rebuild_completed", false)
             if (!rebuildCompleted) {
-                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=false â€” running one-time rebuild.")
+                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=false — running one-time rebuild.")
                 try {
                     reconciliationManager.rebuildAllSnapshots(this@MainActivity)
                     snapshotPrefs.edit().putBoolean("snapshot_rebuild_completed", true).apply()
@@ -206,7 +216,7 @@ class MainActivity : ComponentActivity() {
                     android.util.Log.e("SnapshotRebuild", "Rebuild failed: ${e.message}", e)
                 }
             } else {
-                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=true â€” skipping rebuild.")
+                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=true — skipping rebuild.")
             }
 
             // Perform lightweight startup reconciliation for any new missing dates

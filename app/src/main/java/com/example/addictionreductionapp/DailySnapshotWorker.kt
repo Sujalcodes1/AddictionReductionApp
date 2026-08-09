@@ -26,6 +26,7 @@ class DailySnapshotWorker(
         fun smartReductionEngine(): SmartReductionEngine
         fun reductionPlanRepository(): ReductionPlanRepository
         fun appLimitRepository(): AppLimitRepository
+        fun appUsageRepository(): com.example.addictionreductionapp.data.repository.AppUsageRepository
     }
 
     override suspend fun doWork(): Result {
@@ -34,6 +35,12 @@ class DailySnapshotWorker(
                 applicationContext,
                 WorkerEntryPoint::class.java
             )
+            // Finalize yesterday's usage stats from system
+            try {
+                entryPoint.appUsageRepository().syncUsageFromSystem(daysToSync = 2)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
             entryPoint.reconciliationManager().reconcileMissingSnapshots()
             entryPoint.streakSyncManager().syncTodayStreak()
 
