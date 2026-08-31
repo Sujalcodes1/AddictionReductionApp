@@ -1,5 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Unified Focus/Settings shade — applied to Login/Create/Grant/Status -->
+    <color name="bg_outer">#000000</color>
+    <color name="bg_glow">#0A0E14</color>
+    <color name="bg_card">#0F171E</color>
+    <color name="border_card">#1B262F</color>
+    <color name="bg_input">#1B262F</color>
+    <color name="border_input">#1B262F</color>
+    <color name="border_input_focus">#00D4AA</color>
+    <color name="cyan_accent">#00D4AA</color>
+    <color name="cyan_bright">#00E6B8</color>
+    <color name="cyan_dim">#00A383</color>
+    <color name="btn_start">#00D4AA</color>
+    <color name="btn_end">#00D4AA</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#8E99A4</color>
+    <color name="text_hint">#8E99A4</color>
+    <color name="icon_active">#00D4AA</color>
+    <color name="icon_inactive">#8E99A4</color>
+    <color name="divider">#1B262F</color>
+    <color name="badge_bg">#0F171E</color>
+    <color name="badge_glow">#00D4AA</color>
+    <color name="status_bar">#000000</color>
+    <!-- legacy keep for Compose compat -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
@@ -7,4 +30,19 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Exact Onboarding UI (ViewPager2) — #0d0d0d bg, single teal #00d4aa, full-screen no border -->
+    <color name="ob_bg">#0d0d0d</color>
+    <color name="ob_icon_circle_bg">#1a1a1a</color>
+    <color name="ob_accent">#00d4aa</color>
+    <color name="ob_title_white">#ffffff</color>
+    <color name="ob_body_text">#8a8a8a</color>
+    <color name="ob_number_text">#00d4aa</color>
+    <color name="ob_dot_active">#00d4aa</color>
+    <color name="ob_dot_inactive">#3a3a3a</color>
+    <color name="ob_skip_text">#8a8a8a</color>
+    <color name="ob_back_text">#6a6a6a</color>
+    <color name="ob_btn_bg">#00d4aa</color>
+    <color name="ob_btn_text">#000000</color>
+    <color name="ob_number_line">#00d4aa</color>
 </resources>

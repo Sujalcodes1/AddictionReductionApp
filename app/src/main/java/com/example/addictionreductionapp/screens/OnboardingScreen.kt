@@ -2,7 +2,10 @@ package com.example.addictionreductionapp.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -15,136 +18,280 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.addictionreductionapp.components.PrimaryButton
 import com.example.addictionreductionapp.ui.theme.*
 import kotlinx.coroutines.launch
 
 data class OnboardingPage(
     val icon: ImageVector,
-    val title: String,
+    val titlePrefix: String,
+    val titleHighlight: String,
     val subtitle: String,
-    val accentColor: Color
+    val accentColor: Color,
+    val pageNumber: String
 )
 
 @Composable
 fun OnboardingScreen(onComplete: () -> Unit) {
-    val context = LocalContext.current
     val pagerState = rememberPagerState(pageCount = { 4 })
     val coroutineScope = rememberCoroutineScope()
 
-    val pages = listOf(
-        OnboardingPage(
-            Icons.Default.Psychology,
-            "Reclaim Your Focus",
-            "Take control of your screen time and build better digital habits with smart tools and AI-powered coaching.",
-            RegainTeal
-        ),
-        OnboardingPage(
-            Icons.Default.Timer,
-            "Focus Timer",
-            "Use the study timer with ambient sounds to stay concentrated. Lock your phone and enter deep focus mode.",
-            RegainPurple
-        ),
-        OnboardingPage(
-            Icons.Default.Block,
-            "Block Distractions",
-            "Select apps to block, set daily limits, and schedule blocking windows. Stay productive effortlessly.",
-            RegainBlue
-        ),
-        OnboardingPage(
-            Icons.Default.EmojiEvents,
-            "Earn Rewards",
-            "Build streaks, unlock achievements, and track your progress. Make productivity fun and engaging.",
-            RegainOrange
+    val pages = remember {
+        listOf(
+            OnboardingPage(
+                Icons.Default.Psychology,
+                "Reclaim Your ",
+                "Focus",
+                "Take control of your screen time and build healthy digital habits with AI-powered focus tools.",
+                CyanAccent,
+                "01"
+            ),
+            OnboardingPage(
+                Icons.Default.Shield,
+                "Block ",
+                "Distractions",
+                "Select distracting apps, set custom daily limits, and auto-block impulse usage during work hours.",
+                Color(0xFF00E676),
+                "02"
+            ),
+            OnboardingPage(
+                Icons.Default.Timer,
+                "Deep Focus ",
+                "Timer",
+                "Lock your session with ambient sounds and Pomodoro rhythms to keep your productivity flowing.",
+                Color(0xFF00B0FF),
+                "03"
+            ),
+            OnboardingPage(
+                Icons.Default.EmojiEvents,
+                "Earn ",
+                "Rewards",
+                "Build daily focus streaks, level up your shield, and track real-time habit analytics.",
+                Color(0xFFFFAB00),
+                "04"
+            )
         )
-    )
+    }
+
+    val currentPage = pages[pagerState.currentPage]
 
     Box(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(DarkBackground)
     ) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            OnboardingPageContent(pages[page])
-        }
+        // Dynamic background radial aura matching current page accent
+        val auraAlpha by animateFloatAsState(
+            targetValue = 0.25f,
+            animationSpec = tween(600),
+            label = "auraAlpha"
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            currentPage.accentColor.copy(alpha = auraAlpha),
+                            Color.Transparent
+                        ),
+                        radius = 1200f
+                    )
+                )
+        )
 
         Column(
-            Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .padding(24.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
-            // Page indicators
+            // Header Bar: Step indicator + Skip button
             Row(
-                Modifier
+                modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 32.dp),
-                horizontalArrangement = Arrangement.Center
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                repeat(4) { index ->
-                    val isActive = pagerState.currentPage == index
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 4.dp)
-                            .size(
-                                width = if (isActive) 24.dp else 8.dp,
-                                height = 8.dp
-                            )
-                            .clip(CircleShape)
-                            .background(
-                                if (isActive) pages[index].accentColor
-                                else DarkCardLight
-                            )
-                    )
+                // Step Pill
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = DarkCard.copy(alpha = 0.6f),
+                    border = BorderStroke(1.dp, FocusCardStroke.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = currentPage.pageNumber,
+                            color = currentPage.accentColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = " / 04",
+                            color = TextGray,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+
+                if (pagerState.currentPage < 3) {
+                    TextButton(onClick = onComplete) {
+                        Text(
+                            text = "Skip",
+                            color = TextGray,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.width(1.dp))
                 }
             }
 
-            if (pagerState.currentPage == 3) {
-                PrimaryButton(
-                    text = "Get Started",
-                    onClick = {
-                        onComplete()
-                    }
-                )
-            } else {
+            Spacer(Modifier.height(12.dp))
+
+            // Main ViewPager content
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) { page ->
+                OnboardingPageContent(pages[page])
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Bottom Navigation Control Row
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Dynamic Animated Indicator Pills
                 Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.padding(bottom = 24.dp),
+                    horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = {
-                        onComplete()
-                    }) {
-                        Text("Skip", color = TextGray, fontSize = 16.sp)
-                    }
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = RegainTeal),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Next", color = Color.Black, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(4.dp))
-                        Icon(
-                            Icons.Default.ArrowForward,
-                            contentDescription = null,
-                            tint = Color.Black,
-                            modifier = Modifier.size(18.dp)
+                    repeat(4) { index ->
+                        val isSelected = pagerState.currentPage == index
+                        val width by animateDpAsState(
+                            targetValue = if (isSelected) 32.dp else 8.dp,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            ),
+                            label = "indicatorWidth"
                         )
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 4.dp)
+                                .height(8.dp)
+                                .width(width)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    if (isSelected) currentPage.accentColor
+                                    else DarkCardLight.copy(alpha = 0.6f)
+                                )
+                        )
+                    }
+                }
+
+                // Action Buttons (Next / Get Started)
+                if (pagerState.currentPage == 3) {
+                    Button(
+                        onClick = onComplete,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .shadow(12.dp, RoundedCornerShape(16.dp), spotColor = currentPage.accentColor),
+                        colors = ButtonDefaults.buttonColors(containerColor = currentPage.accentColor),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Get Started",
+                                color = Color.Black,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (pagerState.currentPage > 0) {
+                            TextButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                    }
+                                }
+                            ) {
+                                Text("← Back", color = TextGray, fontSize = 16.sp)
+                            }
+                        } else {
+                            Spacer(Modifier.width(60.dp))
+                        }
+
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
+                            },
+                            modifier = Modifier
+                                .height(52.dp)
+                                .shadow(8.dp, RoundedCornerShape(14.dp), spotColor = currentPage.accentColor),
+                            colors = ButtonDefaults.buttonColors(containerColor = currentPage.accentColor),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Next",
+                                    color = Color.Black,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Icon(
+                                    imageVector = Icons.Default.ArrowForward,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -154,52 +301,67 @@ fun OnboardingScreen(onComplete: () -> Unit) {
 
 @Composable
 private fun OnboardingPageContent(page: OnboardingPage) {
-    val infiniteTransition = rememberInfiniteTransition(label = "glow")
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 0.5f,
+    val infiniteTransition = rememberInfiniteTransition(label = "glowPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = EaseInOutCubic),
+            animation = tween(2200, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = EaseInOutSine),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glowAlpha"
     )
 
     Column(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Glowing icon container
+        // Floating Animated Badge with Radial Glow Rings
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(180.dp)
+            modifier = Modifier
+                .size(200.dp)
+                .scale(pulseScale)
         ) {
-            // Glow effect
+            // Outer Halo Ring
             Box(
-                Modifier
-                    .size(160.dp)
+                modifier = Modifier
+                    .size(190.dp)
+                    .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
                             listOf(
                                 page.accentColor.copy(alpha = glowAlpha),
+                                page.accentColor.copy(alpha = 0.05f),
                                 Color.Transparent
                             )
-                        ),
-                        CircleShape
+                        )
                     )
             )
-            // Icon circle
+
+            // Glass Inner Container
             Surface(
-                modifier = Modifier.size(120.dp),
+                modifier = Modifier.size(128.dp),
                 shape = CircleShape,
-                color = page.accentColor.copy(alpha = 0.15f)
+                color = DarkCard.copy(alpha = 0.75f),
+                border = BorderStroke(1.5.dp, page.accentColor.copy(alpha = 0.6f)),
+                shadowElevation = 16.dp
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        page.icon,
+                        imageVector = page.icon,
                         contentDescription = null,
                         tint = page.accentColor,
                         modifier = Modifier.size(56.dp)
@@ -208,26 +370,43 @@ private fun OnboardingPageContent(page: OnboardingPage) {
             }
         }
 
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(36.dp))
 
+        // Two-Tone Bold Title
         Text(
-            page.title,
+            text = buildAnnotatedString {
+                append(page.titlePrefix)
+                withStyle(SpanStyle(color = page.accentColor, fontWeight = FontWeight.ExtraBold)) {
+                    append(page.titleHighlight)
+                }
+            },
             color = TextWhite,
-            fontSize = 28.sp,
+            fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            lineHeight = 40.sp
         )
 
         Spacer(Modifier.height(16.dp))
 
-        Text(
-            page.subtitle,
-            color = TextGray,
-            fontSize = 16.sp,
-            textAlign = TextAlign.Center,
-            lineHeight = 24.sp
-        )
-
-        Spacer(Modifier.height(100.dp))
+        // Glassmorphic Body Card
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = DarkCard.copy(alpha = 0.45f),
+            border = BorderStroke(1.dp, FocusCardStroke.copy(alpha = 0.35f))
+        ) {
+            Text(
+                text = page.subtitle,
+                color = SubtitleWhite,
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 23.sp,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)
+            )
+        }
     }
 }
+

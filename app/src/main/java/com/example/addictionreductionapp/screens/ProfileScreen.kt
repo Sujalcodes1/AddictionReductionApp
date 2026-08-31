@@ -5,9 +5,7 @@ import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,10 +40,10 @@ fun ProfileScreen(
 ) {
     val startCompose = android.os.SystemClock.elapsedRealtime()
     val context = LocalContext.current
-    val selectedAppCount by blockerViewModel.selectedAppCount.collectAsState()
-    val profile by homeViewModel.profile.collectAsState()
-    val achievements by homeViewModel.achievements.collectAsState()
-    val recentInterventions by homeViewModel.recentInterventions.collectAsState()
+    val selectedAppCount by blockerViewModel.selectedAppCount.collectAsStateWithLifecycle()
+    val profile by homeViewModel.profile.collectAsStateWithLifecycle()
+    val achievements by homeViewModel.achievements.collectAsStateWithLifecycle()
+    val recentInterventions by homeViewModel.recentInterventions.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
     var showNameDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }

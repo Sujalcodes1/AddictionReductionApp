@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.shadow
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.addictionreductionapp.components.AnimatedCircularProgress
 import com.example.addictionreductionapp.ui.theme.*
 import com.example.addictionreductionapp.viewmodel.FocusSessionViewModel
@@ -41,22 +42,25 @@ fun FocusTimerScreen(
 ) {
     val scrollState = rememberScrollState()
 
-    val selectedDuration by focusSessionViewModel.selectedDuration.collectAsState()
-    val isTimerRunning by focusSessionViewModel.isRunning.collectAsState()
-    val remainingSeconds by focusSessionViewModel.remainingSeconds.collectAsState()
-    val isLockMode by focusSessionViewModel.isLockMode.collectAsState()
-    val showComplete by focusSessionViewModel.showComplete.collectAsState()
-    val selectedSoundIndex by focusSessionViewModel.selectedSoundIndex.collectAsState()
-    val profile by focusSessionViewModel.profile.collectAsState()
+    val selectedDuration by focusSessionViewModel.selectedDuration.collectAsStateWithLifecycle()
+    val isTimerRunning by focusSessionViewModel.isRunning.collectAsStateWithLifecycle()
+    val remainingSeconds by focusSessionViewModel.remainingSeconds.collectAsStateWithLifecycle()
+    val isLockMode by focusSessionViewModel.isLockMode.collectAsStateWithLifecycle()
+    val showComplete by focusSessionViewModel.showComplete.collectAsStateWithLifecycle()
+    val selectedSoundIndex by focusSessionViewModel.selectedSoundIndex.collectAsStateWithLifecycle()
+    val profile by focusSessionViewModel.profile.collectAsStateWithLifecycle()
+    val startBorderBrush = remember { Brush.linearGradient(listOf(RegainTeal, RegainPurple)) }
 
-    val durations = listOf(15, 25, 45, 60, 90, 120)
-    val sounds = listOf(
-        AmbientSound("Rain", "Rain"),
-        AmbientSound("Forest", "Forest"),
-        AmbientSound("Cafe", "Cafe"),
-        AmbientSound("Lo-fi", "Lo-fi"),
-        AmbientSound("Silence", "Silence")
-    )
+    val durations = remember { listOf(15, 25, 45, 60, 90, 120) }
+    val sounds = remember {
+        listOf(
+            AmbientSound("Rain", "Rain"),
+            AmbientSound("Forest", "Forest"),
+            AmbientSound("Cafe", "Cafe"),
+            AmbientSound("Lo-fi", "Lo-fi"),
+            AmbientSound("Silence", "Silence")
+        )
+    }
 
     if (showComplete) {
         SessionCompleteScreen(
@@ -175,11 +179,11 @@ fun FocusTimerScreen(
                                 .weight(1f)
                                 .height(56.dp)
                                 .shadow(
-                                    elevation = 8.dp,
+                                    elevation = 3.dp,
                                     shape = RoundedCornerShape(16.dp),
                                     clip = false,
-                                    ambientColor = ErrorRed.copy(alpha = 0.5f),
-                                    spotColor = ErrorRed.copy(alpha = 0.5f)
+                                    ambientColor = ErrorRed.copy(alpha = 0.25f),
+                                    spotColor = ErrorRed.copy(alpha = 0.25f)
                                 ),
                             shape = RoundedCornerShape(16.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f)),
@@ -201,11 +205,11 @@ fun FocusTimerScreen(
                             .weight(1f)
                             .height(56.dp)
                             .shadow(
-                                elevation = 12.dp,
+                                elevation = 4.dp,
                                 shape = RoundedCornerShape(16.dp),
                                 clip = false,
-                                ambientColor = RegainTeal.copy(alpha = 0.5f),
-                                spotColor = RegainTeal.copy(alpha = 0.5f)
+                                ambientColor = RegainTeal.copy(alpha = 0.25f),
+                                spotColor = RegainTeal.copy(alpha = 0.25f)
                             ),
                         colors = ButtonDefaults.buttonColors(containerColor = DarkCard),
                         shape = RoundedCornerShape(16.dp),
@@ -228,13 +232,13 @@ fun FocusTimerScreen(
                         .fillMaxWidth()
                         .height(60.dp)
                         .shadow(
-                            elevation = 14.dp,
+                            elevation = 4.dp,
                             shape = RoundedCornerShape(16.dp),
                             clip = false,
-                            ambientColor = RegainTeal.copy(alpha = 0.5f),
-                            spotColor = RegainPurple.copy(alpha = 0.5f)
+                            ambientColor = RegainTeal.copy(alpha = 0.25f),
+                            spotColor = RegainPurple.copy(alpha = 0.25f)
                         )
-                        .border(1.dp, Brush.linearGradient(listOf(RegainTeal, RegainPurple)), RoundedCornerShape(16.dp)),
+                        .border(1.dp, startBorderBrush, RoundedCornerShape(16.dp)),
                     colors = ButtonDefaults.buttonColors(containerColor = DarkCard),
                     shape = RoundedCornerShape(16.dp),
                     elevation = ButtonDefaults.buttonElevation(
@@ -317,11 +321,11 @@ fun SessionCompleteScreen(duration: Int, streak: Int, sessionsCompleted: Int, on
                     .fillMaxWidth()
                     .height(56.dp)
                     .shadow(
-                        elevation = 12.dp,
+                        elevation = 4.dp,
                         shape = RoundedCornerShape(16.dp),
                         clip = false,
-                        ambientColor = RegainTeal.copy(alpha = 0.5f),
-                        spotColor = RegainTeal.copy(alpha = 0.5f)
+                        ambientColor = RegainTeal.copy(alpha = 0.25f),
+                        spotColor = RegainTeal.copy(alpha = 0.25f)
                     ),
                 colors = ButtonDefaults.buttonColors(containerColor = RegainTeal),
                 shape = RoundedCornerShape(16.dp),

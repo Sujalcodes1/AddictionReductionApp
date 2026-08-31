@@ -18,6 +18,19 @@ class AuthRepository @Inject constructor(
     private val sessionManager: SessionManager
 ) {
 
+    private fun isDevFallbackError(e: Exception): Boolean {
+        val msg = e.message?.lowercase() ?: ""
+        return e is UnknownHostException || e is ConnectException ||
+            e is HttpRequestTimeoutException ||
+            msg.contains("404") || msg.contains("not found") ||
+            msg.contains("invalid api key") || msg.contains("invalid_api_key") ||
+            msg.contains("apikey") || msg.contains("api key") ||
+            msg.contains("unauthorized_invalid_api_key") ||
+            // Supabase returns 401 with "Invalid API key" when publishable/anon key is truncated or wrong
+            msg.contains("hint") && msg.contains("double check your api key") ||
+            msg.contains("401") || msg.contains("403")
+    }
+
     suspend fun register(name: String, email: String, password: String): AuthResult =
         withContext(Dispatchers.IO) {
             try {
@@ -32,12 +45,20 @@ class AuthRepository @Inject constructor(
                 } else {
                     AuthResult.EmailConfirmationRequired
                 }
+            } catch (e: IllegalStateException) {
+                android.util.Log.e("AuthRepository", "Supabase not configured: ${e.message}", e)
+                AuthResult.Failure("App is not configured. Please contact support.")
             } catch (e: Exception) {
-                if (e.message?.contains("404") == true || e.message?.contains("Not Found") == true || e is UnknownHostException || e is ConnectException) {
-                    android.util.Log.w("AuthRepository", "Supabase endpoint unreachable or 404. Using local session fallback for testing.", e)
+                // Dev/offline fallback: Supabase unreachable or misconfigured (invalid/placeholder API key)
+                // The project's local.properties currently contains a truncated sb_publishable key which returns
+                // 401 Invalid API key — fall back to local session so login/register works for testing.
+                if (isDevFallbackError(e) && !isAuthCredentialError(e)) {
+                    android.util.Log.w("AuthRepository", "Supabase unavailable/misconfigured (dev fallback active). Using local session for $email", e)
+                    android.util.Log.w("AuthRepository", "Root cause: ${e.message}")
                     sessionManager.saveSession("dev_local_session_$email")
                     AuthResult.Success
                 } else {
+                    android.util.Log.e("AuthRepository", "Auth register failed: ${e.message}", e)
                     AuthResult.Failure(mapException(e))
                 }
             }
@@ -57,16 +78,30 @@ class AuthRepository @Inject constructor(
                 } else {
                     AuthResult.Failure("Login failed: no session returned. Please try again.")
                 }
+            } catch (e: IllegalStateException) {
+                android.util.Log.e("AuthRepository", "Supabase not configured: ${e.message}", e)
+                AuthResult.Failure("App is not configured. Please contact support.")
             } catch (e: Exception) {
-                if (e.message?.contains("404") == true || e.message?.contains("Not Found") == true || e is UnknownHostException || e is ConnectException) {
-                    android.util.Log.w("AuthRepository", "Supabase endpoint unreachable or 404. Using local session fallback for testing.", e)
+                if (isDevFallbackError(e) && !isAuthCredentialError(e)) {
+                    android.util.Log.w("AuthRepository", "Supabase unavailable/misconfigured (dev fallback active). Using local session for $email", e)
+                    android.util.Log.w("AuthRepository", "Root cause: ${e.message}")
                     sessionManager.saveSession("dev_local_session_$email")
                     AuthResult.Success
                 } else {
+                    android.util.Log.e("AuthRepository", "Auth login failed: ${e.message}", e)
                     AuthResult.Failure(mapException(e))
                 }
             }
         }
+
+    /** Returns true only for user credential errors that must NOT trigger dev fallback. */
+    private fun isAuthCredentialError(e: Exception): Boolean {
+        val msg = e.message?.lowercase() ?: ""
+        return msg.contains("invalid login credentials") || msg.contains("invalid_credentials") ||
+            msg.contains("invalid email") || msg.contains("weak_password") ||
+            msg.contains("user already registered") || msg.contains("already been registered") ||
+            msg.contains("email not confirmed")
+    }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
         try {
@@ -117,11 +152,15 @@ class AuthRepository @Inject constructor(
 
     private fun mapException(e: Exception): String {
         val msg = e.message?.lowercase() ?: ""
+        // Log full message for debugging — prevents generic "Something went wrong" from hiding root cause
+        android.util.Log.e("AuthRepository", "mapException: ${e::class.simpleName}: ${e.message}", e)
         return when {
             e is UnknownHostException || e is ConnectException ->
                 "No internet connection. Please check your network."
             e is HttpRequestTimeoutException ->
                 "Connection timed out. Please try again."
+            msg.contains("invalid api key") || msg.contains("invalid_api_key") || msg.contains("apikey") || msg.contains("unauthorized_invalid_api_key") ->
+                "Authentication service misconfigured (invalid Supabase API key). Run in offline dev mode or fix SUPABASE_ANON_KEY in local.properties."
             msg.contains("invalid login credentials") || msg.contains("invalid_credentials") ->
                 "Invalid email or password."
             msg.contains("user already registered") || msg.contains("already been registered") ->
@@ -134,7 +173,9 @@ class AuthRepository @Inject constructor(
                 "Please verify your email address before logging in."
             msg.contains("rate limit") || msg.contains("too many requests") ->
                 "Too many attempts. Please wait a moment and try again."
-            else -> "Something went wrong. Please try again."
+            // Surface underlying message if short enough — better than generic fallback during dev
+            e.message != null && e.message!!.length < 120 -> e.message!!
+            else -> "Something went wrong. Please try again. (${e::class.simpleName})"
         }
     }
 }

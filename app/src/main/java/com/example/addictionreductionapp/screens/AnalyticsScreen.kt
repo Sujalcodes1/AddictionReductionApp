@@ -56,17 +56,25 @@ fun AnalyticsScreen(
     dashboardViewModel: DashboardViewModel = hiltViewModel()
 ) {
     val startCompose = android.os.SystemClock.elapsedRealtime()
-    val analyticsState by analyticsViewModel.uiState.collectAsState()
-    val dashboardState by dashboardViewModel.uiState.collectAsState()
+    val analyticsState by analyticsViewModel.uiState.collectAsStateWithLifecycle()
+    val dashboardState by dashboardViewModel.uiState.collectAsStateWithLifecycle()
     // Phase 7.5: observe the AddictionProfile StateFlow with lifecycle awareness.
     // collectAsStateWithLifecycle is available via lifecycle-viewmodel-compose:2.8.7
     // (confirmed in build.gradle.kts; transitively includes lifecycle-runtime-compose).
     val addictionProfile by dashboardViewModel.addictionProfile.collectAsStateWithLifecycle()
 
+    val analyticsRadial = remember {
+        Brush.radialGradient(
+            colors = listOf(DarkBackground, Color.Transparent),
+            center = Offset(0.5f * 1000f, 0.45f * 1000f),
+            radius = 900f
+        )
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBackground)
+            .background(analyticsRadial)
     ) {
 
         when {
@@ -211,7 +219,7 @@ private fun ScreenHeader() {
         Surface(
             color = DarkCard,
             shape = RoundedCornerShape(12.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, RegainTeal.copy(alpha = 0.3f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, RegainTeal.copy(alpha = 0.35f))
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -367,7 +375,8 @@ private fun OverviewMetricCard(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Surface(
@@ -399,16 +408,13 @@ private fun FocusScoreCard(
         focusScore >= 50 -> RegainAmber
         else -> ErrorRed
     }
-    val animatedScore by animateFloatAsState(
-        targetValue = focusScore.toFloat(),
-        animationSpec = tween(durationMillis = 1200, easing = EaseOutCubic),
-        label = "focusScore"
-    )
+    val animatedScore = focusScore.toFloat()
 
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -426,9 +432,9 @@ private fun FocusScoreCard(
                         useCenter = false,
                         style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
                     )
-                    // Progress
+                    // Progress — solid color (avoid per-frame sweepGradient shader)
                     drawArc(
-                        brush = Brush.sweepGradient(listOf(scoreColor, scoreColor.copy(alpha = 0.6f))),
+                        color = scoreColor,
                         startAngle = 135f,
                         sweepAngle = (animatedScore / 100f) * 270f,
                         useCenter = false,
@@ -473,7 +479,8 @@ private fun StreakCard(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Surface(
@@ -545,16 +552,13 @@ private fun RiskScoreCard(
         riskScore < 0.6f -> "Moderate"
         else -> "High Risk"
     }
-    val animatedRisk by animateFloatAsState(
-        targetValue = riskScore,
-        animationSpec = tween(1000, easing = EaseOutCubic),
-        label = "risk"
-    )
+    val animatedRisk = riskScore
 
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Surface(
@@ -612,14 +616,15 @@ private fun TopAppsSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Tab switcher
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(DarkCardLight, RoundedCornerShape(10.dp))
+                    .background(DarkCard, RoundedCornerShape(10.dp))
                     .padding(4.dp)
             ) {
                 listOf("Most Used", "Most Opened").forEachIndexed { index, label ->
@@ -632,7 +637,7 @@ private fun TopAppsSection(
                     ) {
                         Text(
                             text = label,
-                            color = if (isSelected) DarkBackground else TextGray,
+                            color = if (isSelected) Color.White else TextGray,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
@@ -691,11 +696,7 @@ private fun AppUsageRow(
         else -> RegainTeal.copy(alpha = 0.6f)
     }
 
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(800, delayMillis = rank * 60, easing = EaseOutCubic),
-        label = "appProgress"
-    )
+    val animatedProgress = progress
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -799,7 +800,8 @@ private fun CategoryAnalyticsSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             displayCategories.forEachIndexed { index, cat ->
@@ -828,11 +830,7 @@ private fun CategoryRow(
     val pctOfTotal = if (totalMinutes > 0) (category.totalMinutes.toFloat() / totalMinutes * 100).toInt() else 0
     val color = categoryColor(category.category)
     val icon = categoryIcon(category.category)
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(900, delayMillis = animDelay, easing = EaseOutCubic),
-        label = "catProgress"
-    )
+    val animatedProgress = progress
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -950,7 +948,8 @@ private fun WeeklyStatChip(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -975,7 +974,8 @@ private fun TrendIndicatorCard(todayMinutes: Int, avgMinutes: Int) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -1017,7 +1017,8 @@ private fun HourlyUsageCard(hourlyUsage: List<HourlyUsagePoint>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -1068,15 +1069,13 @@ private fun HourlyBarChart(hourlyUsage: List<HourlyUsagePoint>) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Bottom
             ) {
+                val barBg = if (mins > 0) barColor else DarkCardLight
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(barHeightFrac)
-                        .background(
-                            if (mins > 0) Brush.verticalGradient(listOf(barColor, barColor.copy(alpha = 0.4f)))
-                            else Brush.verticalGradient(listOf(DarkCardLight, DarkCardLight)),
-                            RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)
-                        )
+                        .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                        .background(barBg)
                 )
             }
         }
@@ -1195,11 +1194,7 @@ private fun BehaviorSignalCard(
     detail: String,
     accentColor: Color
 ) {
-    val animatedSeverity by animateFloatAsState(
-        targetValue = severity,
-        animationSpec = tween(900, easing = EaseOutCubic),
-        label = "severity"
-    )
+    val animatedSeverity = severity
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1279,7 +1274,8 @@ private fun FocusInsightCard(focusScore: FocusScoreDetails) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(14.dp)
+        shape = RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -1334,7 +1330,8 @@ private fun StreakInsightCard(streak: StreakAnalysis) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(14.dp)
+        shape = RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -1420,7 +1417,8 @@ private fun AddictionIntelligencePlaceholder() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Box(
             modifier = Modifier
@@ -1516,7 +1514,7 @@ private fun AddictionScoreCard(profile: AddictionProfile) {
     val levelLabel = profile.addictionLevel.name  // e.g. "LOW", "HIGH"
     val animatedScore by animateFloatAsState(
         targetValue = profile.addictionScore.toFloat(),
-        animationSpec = tween(durationMillis = 1200, easing = EaseOutCubic),
+        animationSpec = tween(durationMillis = 400, easing = EaseOutCubic),
         label = "addictionScore"
     )
 
@@ -1604,7 +1602,8 @@ private fun RelapseStatusCard(profile: AddictionProfile) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -1683,7 +1682,8 @@ private fun UsageProfileCard(profile: AddictionProfile) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -1892,7 +1892,8 @@ private fun EmptyDataCardFull(message: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardLight)
     ) {
         Box(
             modifier = Modifier

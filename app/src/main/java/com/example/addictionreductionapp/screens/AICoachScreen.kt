@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.addictionreductionapp.viewmodel.AICoachViewModel
 import kotlinx.coroutines.launch
 
@@ -38,8 +39,8 @@ fun AICoachScreen(
 ) {
     val startCompose = android.os.SystemClock.elapsedRealtime()
     
-    val uiState by viewModel.uiState.collectAsState()
-    val coachInsights by viewModel.coachInsights.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val coachInsights by viewModel.coachInsights.collectAsStateWithLifecycle()
 
     var showReportDialog by remember { mutableStateOf(false) }
     var reportMessageIndex by remember { mutableIntStateOf(-1) }

@@ -36,10 +36,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -103,17 +105,22 @@ import com.example.addictionreductionapp.screens.PrivacyPolicyScreen
 import com.example.addictionreductionapp.screens.ProfileScreen
 import com.example.addictionreductionapp.screens.RoadmapScreen
 import com.example.addictionreductionapp.screens.SmartReductionSetupScreen
-import com.example.addictionreductionapp.screens.BlockScreen
-import com.example.addictionreductionapp.screens.BottomNavigationBar
 import com.example.addictionreductionapp.screens.LoginScreen
 import com.example.addictionreductionapp.screens.RegisterScreen
+import com.example.addictionreductionapp.screens.BlockScreen
+import com.example.addictionreductionapp.screens.BottomNavigationBar
+import com.example.addictionreductionapp.ui.theme.CyanAccent
 import com.example.addictionreductionapp.ui.theme.DarkBackground
 import com.example.addictionreductionapp.ui.theme.DarkCard
 import com.example.addictionreductionapp.ui.theme.DarkCardLight
 import com.example.addictionreductionapp.ui.theme.ErrorRed
+import com.example.addictionreductionapp.ui.theme.FocusCardBg
+import com.example.addictionreductionapp.ui.theme.FocusCardStroke
 import com.example.addictionreductionapp.ui.theme.RegainOrange
 import com.example.addictionreductionapp.ui.theme.RegainTeal
 import com.example.addictionreductionapp.ui.theme.RegainTheme
+import com.example.addictionreductionapp.ui.theme.SpaceBgCenter
+import com.example.addictionreductionapp.ui.theme.SubtitleWhite
 import com.example.addictionreductionapp.ui.theme.SuccessGreen
 import com.example.addictionreductionapp.ui.theme.TextGray
 import com.example.addictionreductionapp.ui.theme.TextWhite
@@ -160,14 +167,7 @@ class MainActivity : ComponentActivity() {
             val sessionManager = com.example.addictionreductionapp.utils.SessionManager(this@MainActivity)
             val isLoggedIn = sessionManager.isLoggedIn()
 
-            // Sync usage stats from OS UsageStatsManager into Room
-            try {
-                appUsageRepository.syncUsageFromSystem(daysToSync = 7)
-            } catch (e: Exception) {
-                android.util.Log.e("StartupSync", "Failed to sync system usage stats: ${e.message}", e)
-            }
-
-            // Load profile from Room (single source of truth — M3)
+            // Fast path: Load profile + signal NavHost immediately (no blocking on heavy sync)
             var profile = userProfileRepository.getProfile()
             if (profile == null) {
                 profile = UserProfileEntity()
@@ -177,9 +177,15 @@ class MainActivity : ComponentActivity() {
                 userProfileRepository.upsert(profile.copy(isLoggedIn = true))
                 profile = profile.copy(isLoggedIn = true)
             }
+            // Sync ViewPager2 onboarding flag (SmartFocus prefs) with Room hasCompletedOnboarding — ensures single about flow
+            val onboardingDone = getSharedPreferences("SmartFocus", MODE_PRIVATE).getBoolean("onboarding_done", false)
+            if (onboardingDone && !profile.hasCompletedOnboarding) {
+                userProfileRepository.upsert(profile.copy(hasCompletedOnboarding = true))
+                profile = profile.copy(hasCompletedOnboarding = true)
+            }
             profileSnapshot = profile
 
-            // Seed default apps if database is empty
+            // Seed default apps if database is empty (lightweight)
             val allApps = appLimitRepository.getAllAppsOnce()
             if (allApps.isEmpty()) {
                 android.util.Log.d("ConfigMigration", "App blocker database is empty. Seeding defaults...")
@@ -203,7 +209,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // One-time snapshot rebuild safety gate
+            // Unblock UI immediately — NavHost can render while heavy work runs in background
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                prefsLoaded.value = true
+            }
+
+            // Deferred heavy work: run after first frame, low priority, with yield
+            kotlinx.coroutines.delay(1200)
+            try {
+                appUsageRepository.syncUsageFromSystem(daysToSync = 3)
+            } catch (e: Exception) {
+                android.util.Log.e("StartupSync", "Failed to sync system usage stats: ${e.message}", e)
+            }
             val snapshotPrefs = getSharedPreferences("snapshot_prefs", android.content.Context.MODE_PRIVATE)
             val rebuildCompleted = snapshotPrefs.getBoolean("snapshot_rebuild_completed", false)
             if (!rebuildCompleted) {
@@ -215,20 +232,11 @@ class MainActivity : ComponentActivity() {
                 } catch (e: Exception) {
                     android.util.Log.e("SnapshotRebuild", "Rebuild failed: ${e.message}", e)
                 }
-            } else {
-                android.util.Log.d("SnapshotRebuild", "snapshot_rebuild_completed=true — skipping rebuild.")
             }
-
-            // Perform lightweight startup reconciliation for any new missing dates
             try {
                 reconciliationManager.reconcileMissingSnapshots()
             } catch (e: Exception) {
                 e.printStackTrace()
-            }
-
-            // Signal that prefs are fully loaded so NavHost can use the correct startDestination
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                prefsLoaded.value = true
             }
         }
         
@@ -343,6 +351,9 @@ fun AppRoot(
         return
     }
 
+    // Auth is now handled via Compose NavHost (XML LoginActivity deprecated)
+    // If not logged in, NavHost will start at "login" — no Activity redirect needed
+
     // Store block info for the composable to use
     var currentBlockedApp by remember { mutableStateOf("") }
     var currentBlockReason by remember { mutableStateOf("") }
@@ -378,35 +389,30 @@ fun AppRoot(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             if (currentRoute in screensWithNav) {
-                Column {
-                    BottomNavigationBar(navController)
-                    Spacer(
-                        Modifier
-                            .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                            .fillMaxWidth()
-                            .background(Color(0xFF0F171E))
-                    )
-                }
+                BottomNavigationBar(navController)
             }
         },
-        containerColor = DarkBackground
+        containerColor = SpaceBgCenter,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
-                startDestination = if (!isLoggedIn) "login" else if (showOnboarding) "onboarding" else if (showPermissions) "permissions" else if (showSmartReductionSetup) "smart_reduction_setup" else "home",
+                startDestination = if (showOnboarding) "onboarding" else if (showPermissions) "permissions" else if (showSmartReductionSetup) "smart_reduction_setup" else if (!isLoggedIn) "login" else "home",
                 enterTransition = { EnterTransition.None },
                 exitTransition = { ExitTransition.None }
             ) {
+
                 composable("login") {
+                    val loginScope = rememberCoroutineScope()
                     LoginScreen(
                         onLoginSuccess = {
-                            navController.navigate(
-                                if (showOnboarding) "onboarding"
-                                else if (showPermissions) "permissions"
-                                else if (showSmartReductionSetup) "smart_reduction_setup"
-                                else "home"
-                            ) {
+                            loginScope.launch(Dispatchers.IO) {
+                                try {
+                                    com.example.addictionreductionapp.utils.SessionManager(context).saveSession("compose_session_${System.currentTimeMillis()}")
+                                } catch (_: Exception) {}
+                            }
+                            navController.navigate("home") {
                                 popUpTo("login") { inclusive = true }
                             }
                         },
@@ -417,14 +423,15 @@ fun AppRoot(
                 }
 
                 composable("register") {
+                    val registerScope = rememberCoroutineScope()
                     RegisterScreen(
                         onRegisterSuccess = {
-                            navController.navigate(
-                                if (showOnboarding) "onboarding"
-                                else if (showPermissions) "permissions"
-                                else if (showSmartReductionSetup) "smart_reduction_setup"
-                                else "home"
-                            ) {
+                            registerScope.launch(Dispatchers.IO) {
+                                try {
+                                    com.example.addictionreductionapp.utils.SessionManager(context).saveSession("compose_session_${System.currentTimeMillis()}")
+                                } catch (_: Exception) {}
+                            }
+                            navController.navigate("home") {
                                 popUpTo("register") { inclusive = true }
                                 popUpTo("login") { inclusive = true }
                             }
@@ -510,11 +517,15 @@ fun AppRoot(
 
                 composable("profile") {
                     val context = LocalContext.current
+                    val scope = rememberCoroutineScope()
                     Box(Modifier.padding(padding)) {
                         ProfileScreen(
                             onNavigateToApps = { navController.navigate("app_blocker") },
                             onNavigateToPrivacy = { navController.navigate("privacy") },
                             onLogout = {
+                                scope.launch(Dispatchers.IO) {
+                                    try { com.example.addictionreductionapp.utils.SessionManager(context).clearSession() } catch (_: Exception) {}
+                                }
                                 navController.navigate("login") {
                                     popUpTo(0) { inclusive = true }
                                 }
@@ -525,11 +536,15 @@ fun AppRoot(
 
                 composable("settings") {
                     val context = LocalContext.current
+                    val scope = rememberCoroutineScope()
                     Box(Modifier.padding(padding)) {
                         ProfileScreen(
                             onNavigateToApps = { navController.navigate("app_blocker") },
                             onNavigateToPrivacy = { navController.navigate("privacy") },
                             onLogout = {
+                                scope.launch(Dispatchers.IO) {
+                                    try { com.example.addictionreductionapp.utils.SessionManager(context).clearSession() } catch (_: Exception) {}
+                                }
                                 navController.navigate("login") {
                                     popUpTo(0) { inclusive = true }
                                 }
@@ -593,18 +608,28 @@ fun BottomNavigationBar(navController: NavHostController) {
     val items = remember {
         listOf(
             Triple("home",      "Home",     Icons.Default.Home),
-            Triple("timer",     "Timer",    Icons.Default.Timer),
+            Triple("timer",     "Focus",    Icons.Default.Timer),
             Triple("analytics", "Stats",    Icons.Default.BarChart),
-            Triple("coach",     "Coach",    Icons.Default.Psychology),
+            Triple("coach",     "AI Coach", Icons.Default.Psychology),
             Triple("settings",  "Settings", Icons.Default.Settings)
         )
     }
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF0F171E))
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .background(Color.Transparent)
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .border(1.dp, FocusCardStroke.copy(alpha = 0.45f), RoundedCornerShape(28.dp))
+                .background(FocusCardBg.copy(alpha = 0.42f))
+                .padding(horizontal = 8.dp, vertical = 10.dp)
+                .heightIn(min = 52.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -631,6 +656,7 @@ fun BottomNavigationBar(navController: NavHostController) {
                 )
             }
         }
+        }
     }
 }
 
@@ -654,10 +680,10 @@ fun BottomNavItem(
     Box(
         modifier = Modifier
             .width(chipWidth)
-            .height(40.dp)
+            .height(42.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(
-                if (isSelected) Color(0xFF00BFA5).copy(alpha = 0.15f)
+                if (isSelected) CyanAccent.copy(alpha = 0.15f)
                 else Color.Transparent
             )
             .clickable(
@@ -674,7 +700,7 @@ fun BottomNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isSelected) Color(0xFF00BFA5) else Color.Gray,
+                tint = if (isSelected) CyanAccent else SubtitleWhite,
                 modifier = Modifier.size(20.dp)
             )
             AnimatedVisibility(
@@ -686,7 +712,7 @@ fun BottomNavItem(
                     Spacer(Modifier.width(5.dp))
                     Text(
                         text = label,
-                        color = Color(0xFF00BFA5),
+                        color = CyanAccent,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
