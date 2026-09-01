@@ -94,7 +94,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun startPollingUsage() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             flow {
                 while (isActive) {
                     emit(Unit)
@@ -103,38 +103,40 @@ class HomeViewModel @Inject constructor(
             }
             .flowOn(Dispatchers.IO)
             .collect {
-                val calendar = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-
-                val stats = usageStatsManager.queryAndAggregateUsageStats(
-                    calendar.timeInMillis,
-                    System.currentTimeMillis()
-                )
-
-                var total = 0L
-                var blockedCount = 0
-
-                val selectedApps = appLimitRepository.getSelectedAppsOnce()
-                var totalLimitMins = 0L
-                selectedApps.forEach { app ->
-                    val time = stats[app.packageName]?.totalTimeInForeground ?: 0L
-                    total += time
-                    totalLimitMins += app.limitMinutes
-                    if (time >= app.limitMinutes * 60 * 1000L) {
-                        blockedCount++
+                // Heavy IO off main thread — queryAndAggregateUsageStats + Room
+                val result = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    val calendar = Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
                     }
+                    val stats = usageStatsManager.queryAndAggregateUsageStats(
+                        calendar.timeInMillis,
+                        System.currentTimeMillis()
+                    )
+                    var total = 0L
+                    var blockedCount = 0
+                    val selectedApps = appLimitRepository.getSelectedAppsOnce()
+                    var totalLimitMins = 0L
+                    selectedApps.forEach { app ->
+                        val time = stats[app.packageName]?.totalTimeInForeground ?: 0L
+                        total += time
+                        totalLimitMins += app.limitMinutes
+                        if (time >= app.limitMinutes * 60 * 1000L) blockedCount++
+                    }
+                    Triple(total, blockedCount to totalLimitMins, selectedApps.isNotEmpty())
                 }
-
+                val total = result.first
+                val blockedCount = result.second.first
+                val totalLimitMins = result.second.second
+                val hasSelected = result.third
                 _uiState.update {
                     it.copy(
                         totalUsedMillis = total,
                         appsBlockedToday = blockedCount,
                         totalLimitMins = totalLimitMins.coerceAtLeast(1L),
-                        hasSelectedApps = selectedApps.isNotEmpty()
+                        hasSelectedApps = hasSelected
                     )
                 }
             }
@@ -145,21 +147,21 @@ class HomeViewModel @Inject constructor(
     }
 
     fun toggleFocusMode() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val current = userProfileRepository.getProfile() ?: UserProfileEntity()
             userProfileRepository.upsert(current.copy(isFocusModeActive = !current.isFocusModeActive))
         }
     }
 
     fun updateUserName(name: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val current = userProfileRepository.getProfile() ?: UserProfileEntity()
             userProfileRepository.upsert(current.copy(userName = name))
         }
     }
 
     fun completeOnboarding() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val current = userProfileRepository.getProfile() ?: UserProfileEntity()
             userProfileRepository.upsert(current.copy(hasCompletedOnboarding = true))
         }

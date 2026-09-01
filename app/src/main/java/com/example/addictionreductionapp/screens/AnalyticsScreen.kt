@@ -596,7 +596,7 @@ private fun RiskScoreCard(
                     .height(4.dp)
                     .clip(CircleShape),
                 color = riskColor,
-                trackColor = DarkCardLight,
+                trackColor = ProgressTrack,
                 strokeCap = StrokeCap.Round
             )
         }
@@ -749,7 +749,7 @@ private fun AppUsageRow(
                     .height(5.dp)
                     .clip(CircleShape),
                 color = barColor,
-                trackColor = DarkCardLight,
+                trackColor = ProgressTrack,
                 strokeCap = StrokeCap.Round
             )
         }
@@ -883,7 +883,7 @@ private fun CategoryRow(
                     .height(5.dp)
                     .clip(CircleShape),
                 color = if (category.totalMinutes > 0) color else DarkCardLight,
-                trackColor = DarkCardLight,
+                trackColor = ProgressTrack,
                 strokeCap = StrokeCap.Round
             )
         }
@@ -1042,10 +1042,13 @@ private fun HourlyUsageCard(hourlyUsage: List<HourlyUsagePoint>) {
 
 @Composable
 private fun HourlyBarChart(hourlyUsage: List<HourlyUsagePoint>) {
-    // Build full 24-hour map
-    val hourMap = hourlyUsage.associate { it.hourOfDay to it.minutesUsed }
-    val allHours = (0..23).map { h -> Pair(h, hourMap[h] ?: 0) }
-    val maxMins = (allHours.maxOfOrNull { it.second } ?: 1).coerceAtLeast(1)
+    // Cached calculations — only recompute when data changes
+    val (allHours, maxMins) = remember(hourlyUsage) {
+        val hourMap = hourlyUsage.associate { it.hourOfDay to it.minutesUsed }
+        val hours = (0..23).map { h -> Pair(h, hourMap[h] ?: 0) }
+        val max = (hours.maxOfOrNull { it.second } ?: 1).coerceAtLeast(1)
+        hours to max
+    }
 
     val lateNightHours = setOf(22, 23, 0, 1, 2, 3, 4, 5)
     val eveningHours = setOf(18, 19, 20, 21)
@@ -1252,7 +1255,7 @@ private fun BehaviorSignalCard(
                                 .height(4.dp)
                                 .clip(CircleShape),
                             color = accentColor,
-                            trackColor = DarkCardLight,
+                            trackColor = ProgressTrack,
                             strokeCap = StrokeCap.Round
                         )
                         Spacer(Modifier.width(8.dp))
@@ -1584,7 +1587,7 @@ private fun AddictionScoreCard(profile: AddictionProfile) {
                     .height(5.dp)
                     .clip(CircleShape),
                 color = levelColor,
-                trackColor = DarkCardLight,
+                trackColor = ProgressTrack,
                 strokeCap = StrokeCap.Round
             )
         }

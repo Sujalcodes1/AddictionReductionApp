@@ -71,24 +71,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.addictionreductionapp.ui.theme.RegainTeal
-import com.example.addictionreductionapp.ui.theme.RegainTeal
-import com.example.addictionreductionapp.ui.theme.RegainTeal
 import com.example.addictionreductionapp.ui.theme.DarkBackground
 import com.example.addictionreductionapp.ui.theme.DarkCard
 import com.example.addictionreductionapp.ui.theme.DarkCardLight
+import com.example.addictionreductionapp.ui.theme.PlaceholderWhite
 import com.example.addictionreductionapp.ui.theme.RegainTeal
-import com.example.addictionreductionapp.ui.theme.TextGray
-import com.example.addictionreductionapp.ui.theme.DarkCardLight
-import com.example.addictionreductionapp.ui.theme.RegainTeal
-import com.example.addictionreductionapp.ui.theme.DarkCard
-import com.example.addictionreductionapp.ui.theme.DarkCardLight
-import com.example.addictionreductionapp.ui.theme.DarkCard
-import com.example.addictionreductionapp.ui.theme.DarkCardLight
-import com.example.addictionreductionapp.ui.theme.TextGray
-import com.example.addictionreductionapp.ui.theme.TextGray
-import com.example.addictionreductionapp.ui.theme.DarkBackground
-import com.example.addictionreductionapp.ui.theme.DarkBackground
 import com.example.addictionreductionapp.ui.theme.TextGray
 import com.example.addictionreductionapp.ui.theme.ValidationError
 import com.example.addictionreductionapp.ui.theme.glassGlow
@@ -339,7 +326,7 @@ fun LoginScreen(
                                 Icon(
                                     imageVector = image,
                                     contentDescription = "Toggle password visibility",
-                                    tint = Color(0xFF7A9AAA),
+                                    tint = PlaceholderWhite,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -362,7 +349,7 @@ fun LoginScreen(
                             focusedLeadingIconColor = if (passwordError != null) ValidationError else RegainTeal,
                             unfocusedLeadingIconColor = if (passwordError != null) ValidationError else RegainTeal,
                             focusedTrailingIconColor = RegainTeal,
-                            unfocusedTrailingIconColor = Color(0xFF7A9AAA),
+                            unfocusedTrailingIconColor = PlaceholderWhite,
                             errorBorderColor = ValidationError,
                             errorLeadingIconColor = ValidationError,
                             errorTextColor = Color.White
@@ -876,7 +863,7 @@ fun RegisterScreen(
                                 Icon(
                                     imageVector = image,
                                     contentDescription = "Toggle password visibility",
-                                    tint = Color(0xFF7A9AAA),
+                                    tint = PlaceholderWhite,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -899,7 +886,7 @@ fun RegisterScreen(
                             focusedLeadingIconColor = if (passwordError != null) ValidationError else RegainTeal,
                             unfocusedLeadingIconColor = if (passwordError != null) ValidationError else RegainTeal,
                             focusedTrailingIconColor = RegainTeal,
-                            unfocusedTrailingIconColor = Color(0xFF7A9AAA),
+                            unfocusedTrailingIconColor = PlaceholderWhite,
                             errorBorderColor = ValidationError,
                             errorLeadingIconColor = ValidationError,
                             errorTextColor = Color.White

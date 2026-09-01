@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.shadow
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.addictionreductionapp.components.GradientButton
 import com.example.addictionreductionapp.data.local.entities.AppLimitEntity
 import com.example.addictionreductionapp.ui.theme.*
@@ -33,8 +34,8 @@ fun AppBlockerScreen(
     var showScheduleDialog by remember { mutableStateOf(false) }
     var scheduleApp by remember { mutableStateOf<AppLimitEntity?>(null) }
 
-    val apps by viewModel.allApps.collectAsState()
-    val reductionPlans by viewModel.activeReductionPlans.collectAsState()
+    val apps by viewModel.allApps.collectAsStateWithLifecycle()
+    val reductionPlans by viewModel.activeReductionPlans.collectAsStateWithLifecycle()
 
     Box(Modifier.fillMaxSize()
         .background(DarkBackground)
@@ -168,7 +169,8 @@ fun AppBlockerScreen(
                         if (app.isSelected) {
                             Spacer(Modifier.height(12.dp))
 
-                            // Limit Slider
+                            // Limit Slider — debounced: local state during drag, persist on finish
+                            var sliderValue by remember(app.limitMinutes) { mutableFloatStateOf(app.limitMinutes.toFloat()) }
                             Row(
                                 Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
@@ -187,17 +189,16 @@ fun AppBlockerScreen(
                                 )
                                 Spacer(Modifier.weight(1f))
                                 Text(
-                                    "${app.limitMinutes} min",
+                                    "${sliderValue.toInt()} min",
                                     color = RegainTeal,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                             Slider(
-                                value = app.limitMinutes.toFloat(),
-                                onValueChange = {
-                                    viewModel.updateLimit(app, it.toInt())
-                                },
+                                value = sliderValue,
+                                onValueChange = { sliderValue = it },
+                                onValueChangeFinished = { viewModel.updateLimit(app, sliderValue.toInt()) },
                                 valueRange = 1f..180f,
                                 colors = SliderDefaults.colors(
                                     thumbColor = RegainTeal,

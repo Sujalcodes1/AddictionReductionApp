@@ -129,7 +129,7 @@ fun AnimatedCircularProgress(
     size: Dp = 240.dp,
     strokeWidth: Dp = 12.dp,
     progressColor: Color = CyanAccent,
-    trackColor: Color = FocusInputBorder,
+    trackColor: Color = ProgressTrack,
     content: @Composable () -> Unit = {}
 ) {
     val animatedProgress by animateFloatAsState(
@@ -287,7 +287,7 @@ fun HomeStatCardCompact(
                     progress = { progress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
                     color = CyanAccent,
-                    trackColor = FocusInputBorder,
+                    trackColor = ProgressTrack,
                     strokeCap = StrokeCap.Round
                 )
             }
@@ -350,7 +350,7 @@ fun AppUsageItem(
                     .height(6.dp)
                     .clip(CircleShape),
                 color = barColor,
-                trackColor = DarkCardLight,
+                trackColor = ProgressTrack,
                 strokeCap = StrokeCap.Round
             )
         }
@@ -418,7 +418,7 @@ fun AchievementBadge(
                         .height(4.dp)
                         .clip(CircleShape),
                     color = RegainTeal,
-                    trackColor = DarkCardLight,
+                    trackColor = ProgressTrack,
                     strokeCap = StrokeCap.Round
                 )
             } else {

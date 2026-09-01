@@ -145,7 +145,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                         )
                         Text(
                             text = " / 04",
-                            color = TextGray,
+                            color = SubtitleWhite,
                             fontSize = 13.sp
                         )
                     }
@@ -155,7 +155,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                     TextButton(onClick = onComplete) {
                         Text(
                             text = "Skip",
-                            color = TextGray,
+                            color = SubtitleWhite,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -230,7 +230,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Get Started",
-                                color = Color.Black,
+                                color = DarkBackground,
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -238,7 +238,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                             Icon(
                                 imageVector = Icons.Default.ArrowForward,
                                 contentDescription = null,
-                                tint = Color.Black,
+                                tint = DarkBackground,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -257,7 +257,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                                     }
                                 }
                             ) {
-                                Text("← Back", color = TextGray, fontSize = 16.sp)
+                                Text("← Back", color = SubtitleWhite, fontSize = 16.sp)
                             }
                         } else {
                             Spacer(Modifier.width(60.dp))
@@ -279,7 +279,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = "Next",
-                                    color = Color.Black,
+                                    color = DarkBackground,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -287,7 +287,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowForward,
                                     contentDescription = null,
-                                    tint = Color.Black,
+                                    tint = DarkBackground,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.addictionreductionapp.ui.theme.*
 import com.example.addictionreductionapp.viewmodel.RoadmapViewModel
 
@@ -28,8 +29,8 @@ fun RoadmapScreen(
     onBack: () -> Unit,
     viewModel: RoadmapViewModel = hiltViewModel()
 ) {
-    val plan by viewModel.plan.collectAsState()
-    val reductionPlans by viewModel.reductionPlans.collectAsState()
+    val plan by viewModel.plan.collectAsStateWithLifecycle()
+    val reductionPlans by viewModel.reductionPlans.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -83,7 +84,7 @@ fun RoadmapScreen(
                             progress = { progress },
                             modifier = Modifier.fillMaxWidth().height(6.dp),
                             color = RegainTeal,
-                            trackColor = DarkCardLight,
+                            trackColor = ProgressTrack,
                             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                         )
                     }
@@ -132,7 +133,7 @@ fun RoadmapScreen(
             Spacer(Modifier.height(8.dp))
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(p.milestones) { milestone ->
+                items(p.milestones, key = { it.weekNumber }) { milestone ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = DarkCard),
                         shape = RoundedCornerShape(12.dp)

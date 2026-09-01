@@ -68,7 +68,7 @@ class AppBlockService : AccessibilityService() {
     companion object {
         private const val TAG = "AppBlockService"
         private const val BLOCK_COOLDOWN_MS = 5_000L
-        private const val POLL_INTERVAL_MS = 2_000L
+        private const val POLL_INTERVAL_MS = 10_000L
         private const val MIN_SESSION_DURATION_MS = 3_000L
         private const val NOTIFICATION_ID = 2002
         private const val CHANNEL_ID = "accessibility_service"

@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.addictionreductionapp.viewmodel.CategoryOption
 import com.example.addictionreductionapp.viewmodel.SmartReductionSetupViewModel
 import com.example.addictionreductionapp.ui.theme.*
@@ -26,10 +27,10 @@ fun SmartReductionSetupScreen(
     onComplete: () -> Unit,
     viewModel: SmartReductionSetupViewModel = hiltViewModel()
 ) {
-    val categories by viewModel.categories.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val summary by viewModel.summary.collectAsState()
-    val hasRealData by viewModel.hasRealData.collectAsState()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val summary by viewModel.summary.collectAsStateWithLifecycle()
+    val hasRealData by viewModel.hasRealData.collectAsStateWithLifecycle()
 
     Column(
         Modifier

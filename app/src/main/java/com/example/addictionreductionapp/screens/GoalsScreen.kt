@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.addictionreductionapp.ui.theme.*
 import com.example.addictionreductionapp.viewmodel.GoalsViewModel
 
@@ -34,8 +35,8 @@ fun GoalsScreen(
     onBack: () -> Unit,
     viewModel: GoalsViewModel = hiltViewModel()
 ) {
-    val activeGoals by viewModel.activeGoals.collectAsState()
-    val uiState by viewModel.uiState.collectAsState()
+    val activeGoals by viewModel.activeGoals.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -101,7 +102,7 @@ fun GoalsScreen(
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(activeGoals) { goal ->
+                items(activeGoals, key = { it.id }) { goal ->
                     GoalCard(
                         goal = goal,
                         onComplete = { viewModel.completeGoal(goal) },
@@ -208,7 +209,7 @@ private fun GoalCard(
                 progress = { goal.progress.coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth().height(6.dp),
                 color = if (goal.progress >= 0.5f) SuccessGreen else accentColor,
-                trackColor = DarkCardLight,
+                trackColor = ProgressTrack,
                 strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
             )
 

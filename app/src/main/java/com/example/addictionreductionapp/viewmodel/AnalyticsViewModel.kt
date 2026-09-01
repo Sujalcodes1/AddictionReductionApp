@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -65,11 +66,11 @@ class AnalyticsViewModel @Inject constructor(
                     lastObservedDate = currentDate
                     bindDateAnalytics(currentDate)
                 }
-                // Periodic background usage sync every 30 seconds
+                // Throttled background sync — 60s instead of 30s to reduce CPU
                 try {
                     appUsageRepository.syncUsageFromSystem(daysToSync = 1)
                 } catch (_: Exception) { }
-                delay(30_000L)
+                delay(60_000L)
             }
         }
     }
@@ -90,31 +91,31 @@ class AnalyticsViewModel @Inject constructor(
                 android.util.Log.e("AnalyticsViewModel", "Sync usage failed: ${e.message}", e)
             }
 
-            // 1. Basic Stats
+            // 1. Basic Stats — throttled
             launch {
                 combine(
                     analyticsRepository.getTotalScreenTimeToday(today),
                     analyticsRepository.getTotalOpensToday(today)
                 ) { time, opens ->
                     _uiState.update { it.copy(dailyScreenTimeMinutes = time ?: 0, totalOpens = opens ?: 0) }
-                }.catch { }.collect { }
+                }.distinctUntilChanged().catch { }.collect { }
             }
 
-            // 2. Categories
+            // 2. Categories — distinct
             launch {
-                analyticsRepository.getCategoryTotalsToday(today).catch { }.collect { categories ->
+                analyticsRepository.getCategoryTotalsToday(today).distinctUntilChanged().catch { }.collect { categories ->
                     _uiState.update { it.copy(categoryUsage = categories) }
                 }
             }
 
-            // 3. Hourly
+            // 3. Hourly — distinct
             launch {
-                analyticsRepository.getHourlyUsageToday(today).catch { }.collect { hourly ->
+                analyticsRepository.getHourlyUsageToday(today).distinctUntilChanged().catch { }.collect { hourly ->
                     _uiState.update { it.copy(hourlyUsage = hourly) }
                 }
             }
 
-            // 4. Apps & Weekly
+            // 4. Apps & Weekly — distinct
             launch {
                 combine(
                     analyticsRepository.getMostUsedAppsToday(today),
@@ -130,29 +131,31 @@ class AnalyticsViewModel @Inject constructor(
                             weeklyAverageMinutes = avg
                         ) 
                     }
-                }.catch { }.collect { }
+                }.distinctUntilChanged().catch { }.collect { }
             }
 
-            // 5. Streaks
+            // 5. Streaks — distinct
             launch {
-                analyticsRepository.getHistoricalFocusScoreList(startDate30, today).catch { }.collect { scores ->
+                analyticsRepository.getHistoricalFocusScoreList(startDate30, today).distinctUntilChanged().catch { }.collect { scores ->
                     val streak = streakEngine.calculateStreak(scores)
                     _uiState.update { it.copy(streakAnalysis = streak) }
                 }
             }
 
-            // 6. Historical Trends (7-day window)
+            // 6. Historical Trends (7-day window) — distinct
             launch {
                 historicalTrendsRepository.generateBehaviorTrendSummary(windowDays = 7)
+                    .distinctUntilChanged()
                     .catch { }
                     .collect { summary ->
                         _uiState.update { it.copy(weeklyTrendSummary = summary) }
                     }
             }
 
-            // 7. Historical Trends (30-day window)
+            // 7. Historical Trends (30-day window) — distinct
             launch {
                 historicalTrendsRepository.generateBehaviorTrendSummary(windowDays = 30)
+                    .distinctUntilChanged()
                     .catch { }
                     .collect { summary ->
                         _uiState.update { it.copy(monthlyTrendSummary = summary) }
@@ -212,7 +215,7 @@ class AnalyticsViewModel @Inject constructor(
                             behavioralSnapshot = snapshot
                         )
                     }
-                }.catch { }.collect { }
+                }.distinctUntilChanged().catch { }.collect { }
             }
         }
     }

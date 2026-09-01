@@ -185,7 +185,7 @@ fun AICoachScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 12.dp)
         ) {
-            items(uiState.messages.withIndex().toList()) { (index, pair) ->
+            items(uiState.messages.withIndex().toList(), key = { it.index }) { (index, pair) ->
                 val sender = pair.first
                 val text = pair.second
                 val isUser = sender == "user"

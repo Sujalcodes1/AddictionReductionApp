@@ -92,6 +92,9 @@ android {
         // can be read from local.properties at compile time without hardcoding.
         buildConfig = true
     }
+    composeCompiler {
+        enableStrongSkippingMode = true
+    }
     // NOTE: Do NOT add composeOptions { kotlinCompilerExtensionVersion = "..." } here.
     // With Kotlin 2.x + kotlin.plugin.compose, the compiler version is managed
     // automatically by the plugin. Adding it manually causes a conflict.

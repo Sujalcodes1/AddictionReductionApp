@@ -44,7 +44,6 @@ fun FocusTimerScreen(
 
     val selectedDuration by focusSessionViewModel.selectedDuration.collectAsStateWithLifecycle()
     val isTimerRunning by focusSessionViewModel.isRunning.collectAsStateWithLifecycle()
-    val remainingSeconds by focusSessionViewModel.remainingSeconds.collectAsStateWithLifecycle()
     val isLockMode by focusSessionViewModel.isLockMode.collectAsStateWithLifecycle()
     val showComplete by focusSessionViewModel.showComplete.collectAsStateWithLifecycle()
     val selectedSoundIndex by focusSessionViewModel.selectedSoundIndex.collectAsStateWithLifecycle()
@@ -115,19 +114,12 @@ fun FocusTimerScreen(
             Text("Stay focused. Block distractions.", color = TextGray, fontSize = 14.sp, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(40.dp))
 
-            val totalSeconds = selectedDuration * 60
-            val progress = if (isTimerRunning || remainingSeconds < totalSeconds) {
-                remainingSeconds.toFloat() / totalSeconds.toFloat()
-            } else 1f
-
-            AnimatedCircularProgress(progress = progress, size = 260.dp, strokeWidth = 10.dp) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    val mins = remainingSeconds / 60
-                    val secs = remainingSeconds % 60
-                    Text(String.format("%02d:%02d", mins, secs), color = TextWhite, fontSize = 52.sp, fontWeight = FontWeight.Light)
-                    Text(if (isTimerRunning) "focusing..." else "ready", color = RegainTeal, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp)
-                }
-            }
+            // Isolated leaf — only this recomposes each second
+            IsolatedTimerDisplay(
+                viewModel = focusSessionViewModel,
+                selectedDuration = selectedDuration,
+                isTimerRunning = isTimerRunning
+            )
 
             Spacer(Modifier.height(32.dp))
 
@@ -267,6 +259,30 @@ fun FocusTimerScreen(
             }
 
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun IsolatedTimerDisplay(
+    viewModel: FocusSessionViewModel,
+    selectedDuration: Int,
+    isTimerRunning: Boolean
+) {
+    // Isolated collection — parent does not recompose on each tick
+    val remainingSeconds by viewModel.remainingSeconds.collectAsStateWithLifecycle()
+    val totalSeconds = remember(selectedDuration) { selectedDuration * 60 }
+    val progress by remember(remainingSeconds, totalSeconds, isTimerRunning) {
+        derivedStateOf {
+            if (isTimerRunning || remainingSeconds < totalSeconds) remainingSeconds.toFloat() / totalSeconds.toFloat() else 1f
+        }
+    }
+    AnimatedCircularProgress(progress = progress, size = 260.dp, strokeWidth = 10.dp) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val mins = remainingSeconds / 60
+            val secs = remainingSeconds % 60
+            Text(String.format("%02d:%02d", mins, secs), color = TextWhite, fontSize = 52.sp, fontWeight = FontWeight.Light)
+            Text(if (isTimerRunning) "focusing..." else "ready", color = RegainTeal, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp)
         }
     }
 }

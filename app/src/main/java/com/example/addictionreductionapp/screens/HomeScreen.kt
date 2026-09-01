@@ -371,7 +371,7 @@ fun HomeScreen(
                         icon = Icons.Default.BarChart,
                         value = goalsProgress,
                         label = "Goals Progress",
-                        accentColor = Color(0xFF69F0AE),
+                        accentColor = RegainTeal,
                         progress = goalsProgressFrac
                     )
                 }
@@ -456,7 +456,7 @@ fun HomeScreen(
                                             }
                                             Spacer(Modifier.height(5.dp))
                                             Box(
-                                                Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(DarkCardLight)
+                                                Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(ProgressTrack)
                                             ) {
                                                 Box(
                                                     Modifier.fillMaxWidth(progress * 0.35f + 0.12f)

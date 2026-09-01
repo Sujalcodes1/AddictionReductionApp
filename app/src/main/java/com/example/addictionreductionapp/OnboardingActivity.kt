@@ -28,8 +28,8 @@ class OnboardingActivity : AppCompatActivity() {
         binding = ActivityOnboardingBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        window.statusBarColor = Color.parseColor("#0d0d0d")
-        window.navigationBarColor = Color.parseColor("#0d0d0d")
+        window.statusBarColor = Color.parseColor("#070B0E")
+        window.navigationBarColor = Color.parseColor("#070B0E")
         WindowInsetsControllerCompat(window, window.decorView)
             .isAppearanceLightStatusBars = false
 
