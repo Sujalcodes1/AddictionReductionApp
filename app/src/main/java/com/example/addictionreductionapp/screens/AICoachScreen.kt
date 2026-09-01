@@ -30,6 +30,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.addictionreductionapp.ui.theme.CyanAccent
+import com.example.addictionreductionapp.ui.theme.DarkBackground
+import com.example.addictionreductionapp.ui.theme.DarkCard
+import com.example.addictionreductionapp.ui.theme.DarkCardLight
+import com.example.addictionreductionapp.ui.theme.RegainTeal
+import com.example.addictionreductionapp.ui.theme.TextGray
 import com.example.addictionreductionapp.viewmodel.AICoachViewModel
 import kotlinx.coroutines.launch
 
@@ -75,13 +81,13 @@ fun AICoachScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(DarkBackground)
     ) {
         // ── Header ───────────────────────────────────────────────
         Box(
             Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF0F171E))
+                .background(DarkCard)
                 .padding(16.dp)
         ) {
             Row(
@@ -91,7 +97,7 @@ fun AICoachScreen(
                 Box(
                     Modifier
                         .size(44.dp)
-                        .background(Color(0xFF00BFA5).copy(alpha = 0.2f), CircleShape),
+                        .background(CyanAccent.copy(alpha = 0.2f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("🔥", fontSize = 22.sp)
@@ -106,7 +112,7 @@ fun AICoachScreen(
                     )
                     Text(
                         if (uiState.rateLimitReached) "Limit reached" else "AI Focus Coach • Online",
-                        color = if (uiState.rateLimitReached) Color(0xFFFF9800) else Color(0xFF00BFA5),
+                        color = if (uiState.rateLimitReached) Color(0xFFFF9800) else CyanAccent,
                         fontSize = 12.sp
                     )
                 }
@@ -139,7 +145,7 @@ fun AICoachScreen(
                         com.example.addictionreductionapp.data.models.CoachPriority.CRITICAL -> Color(0xFFFF4444)
                         com.example.addictionreductionapp.data.models.CoachPriority.HIGH -> Color(0xFFFF9800)
                         com.example.addictionreductionapp.data.models.CoachPriority.MEDIUM -> Color(0xFFFFEB3B)
-                        com.example.addictionreductionapp.data.models.CoachPriority.LOW -> Color(0xFF00BFA5)
+                        com.example.addictionreductionapp.data.models.CoachPriority.LOW -> CyanAccent
                     }
                     Box(
                         modifier = Modifier
@@ -192,8 +198,8 @@ fun AICoachScreen(
                             Modifier
                                 .widthIn(max = 280.dp)
                                 .background(
-                                    if (isUser) Color(0xFF00BFA5).copy(alpha = 0.2f)
-                                    else Color(0xFF0F171E),
+                                    if (isUser) CyanAccent.copy(alpha = 0.2f)
+                                    else DarkCard,
                                     RoundedCornerShape(
                                         topStart = 16.dp, topEnd = 16.dp,
                                         bottomStart = if (isUser) 16.dp else 4.dp,
@@ -202,8 +208,8 @@ fun AICoachScreen(
                                 )
                                 .border(
                                     1.dp,
-                                    if (isUser) Color(0xFF00BFA5).copy(alpha = 0.4f)
-                                    else Color(0xFF1B262F),
+                                    if (isUser) CyanAccent.copy(alpha = 0.4f)
+                                    else DarkCardLight,
                                     RoundedCornerShape(16.dp)
                                 )
                                 .padding(12.dp)
@@ -252,10 +258,10 @@ fun AICoachScreen(
                     Row {
                         Box(
                             Modifier
-                                .background(Color(0xFF0F171E), RoundedCornerShape(12.dp))
+                                .background(DarkCard, RoundedCornerShape(12.dp))
                                 .padding(12.dp)
                         ) {
-                            Text("Arjuna is thinking...", color = Color.Gray, fontSize = 13.sp)
+                            Text("Arjuna is thinking...", color = TextGray, fontSize = 13.sp)
                         }
                     }
                 }
@@ -271,10 +277,10 @@ fun AICoachScreen(
                 OutlinedButton(
                     onClick = { viewModel.sendMessage(reply) },
                     shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, Color(0xFF00BFA5).copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.5f)),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Text(reply, color = Color(0xFF00BFA5), fontSize = 12.sp)
+                    Text(reply, color = CyanAccent, fontSize = 12.sp)
                 }
             }
         }
@@ -290,13 +296,13 @@ fun AICoachScreen(
                 value = uiState.currentInput,
                 onValueChange = { viewModel.updateInput(it) },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask Arjuna...", color = Color.Gray) },
+                placeholder = { Text("Ask Arjuna...", color = TextGray) },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF00BFA5),
-                    unfocusedBorderColor = Color(0xFF1B262F),
+                    focusedBorderColor = CyanAccent,
+                    unfocusedBorderColor = DarkCardLight,
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    cursorColor = Color(0xFF00BFA5)
+                    cursorColor = CyanAccent
                 ),
                 shape = RoundedCornerShape(24.dp),
                 maxLines = 3
@@ -310,10 +316,10 @@ fun AICoachScreen(
                         elevation = 8.dp,
                         shape = CircleShape,
                         clip = false,
-                        ambientColor = Color(0xFF00BFA5).copy(alpha = 0.5f),
-                        spotColor = Color(0xFF00BFA5).copy(alpha = 0.5f)
+                        ambientColor = CyanAccent.copy(alpha = 0.5f),
+                        spotColor = CyanAccent.copy(alpha = 0.5f)
                     )
-                    .background(Color(0xFF00BFA5), CircleShape)
+                    .background(CyanAccent, CircleShape)
             ) {
                 Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.Black)
             }
@@ -325,7 +331,7 @@ fun AICoachScreen(
         val reportOptions = listOf("Offensive or inappropriate", "Harmful advice", "Inaccurate or misleading", "Spam or irrelevant", "Other")
         AlertDialog(
             onDismissRequest = { showReportDialog = false; reportReason = "" },
-            containerColor = Color(0xFF0F171E),
+            containerColor = DarkCard,
             shape = RoundedCornerShape(16.dp),
             title = { Text("Report AI Response", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
             text = {
@@ -347,7 +353,7 @@ fun AICoachScreen(
                             RadioButton(
                                 selected = reportReason == option,
                                 onClick = { reportReason = option },
-                                colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF00BFA5))
+                                colors = RadioButtonDefaults.colors(selectedColor = CyanAccent)
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(option, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
@@ -363,7 +369,7 @@ fun AICoachScreen(
                         reportReason = ""
                         reportMessageIndex = -1
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFA5)),
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
                     shape = RoundedCornerShape(8.dp),
                     enabled = reportReason.isNotEmpty()
                 ) {

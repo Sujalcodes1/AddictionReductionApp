@@ -2,26 +2,26 @@ package com.example.addictionreductionapp.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary Accent — unified to current app shade #00BFA5 (lag-safe, single teal)
-val RegainTeal = Color(0xFF00BFA5) // cyan_accent — all onboarding pages
-val RegainTealLight = Color(0xFF64FFDA)
-val RegainTealDark = Color(0xFF00897B)
-val RegainPurple = Color(0xFF00BFA5) // aliased to teal per new design (no per-page blue/purple)
-val RegainPurpleLight = Color(0xFFCE93D8)
-val RegainBlue = Color(0xFF00BFA5) // aliased to teal
+// Primary Accent — unified to Image 1 shade #14B8A6 (deep teal, screenshot-matched)
+val RegainTeal = Color(0xFF14B8A6) // image accent — login/register/grant/home/focus/status/ai coach/settings/nav
+val RegainTealLight = Color(0xFF5EEAD4)
+val RegainTealDark = Color(0xFF0F766E)
+val RegainPurple = Color(0xFF14B8A6) // aliased to image teal (single shade system)
+val RegainPurpleLight = Color(0xFF5EEAD4)
+val RegainBlue = Color(0xFF14B8A6) // aliased to image teal
 val RegainOrange = Color(0xFFFF9800)
 val RegainAmber = Color(0xFFFFCA28)
-// Onboarding aliases — all point to current app shade #00BFA5
-val ObAccentTeal = Color(0xFF00BFA5)
-val ObAccentBlue = Color(0xFF00BFA5)
-val ObAccentPurple = Color(0xFF00BFA5)
+// Onboarding aliases — all point to image shade #14B8A6
+val ObAccentTeal = Color(0xFF14B8A6)
+val ObAccentBlue = Color(0xFF14B8A6)
+val ObAccentPurple = Color(0xFF14B8A6)
 
-// Background & Surface Colors
-val DarkBackground = Color(0xFF000000)
-val DarkSurface = Color(0xFF0A0E14)
-val DarkCard = Color(0xFF0F171E)
-val DarkCardLight = Color(0xFF1B262F)
-val DarkNavBar = Color(0xFF0A0F16)
+// Background & Surface Colors — Image 1 deep-space (teal-tinted near-black)
+val DarkBackground = Color(0xFF020C0E)
+val DarkSurface = Color(0xFF0A1E22)
+val DarkCard = Color(0xFF11272D)
+val DarkCardLight = Color(0xFF1C3339)
+val DarkNavBar = Color(0xFF0A1E22)
 
 // Text Colors
 val TextWhite = Color(0xFFFFFFFF)
@@ -40,37 +40,38 @@ val BronzeAccent = Color(0xFFCD7F32)
 
 // ──────────────────────────────────────────────────────────────────────
 //  Deep-Space Glassmorphism — Shared Palette (Single Source of Truth)
+//  Image 1 matched — deep teal near-black + #14B8A6 accent
 //  Used by Login, Register, Permissions, Profile, Dashboard, etc.
 //  DO NOT duplicate these values in screens — import from here.
 // ──────────────────────────────────────────────────────────────────────
-val SpaceBgCenter = Color(0xFF010D0F)          // Outer background #010d0f
-val SpaceBgMid = Color(0xFF0D1E28)
-val SpaceBgEdge = Color(0xFF0A1520)
-val AmbientGlow = Color(0x26148C8C)            // rgba(20,120,140,0.15)
-val RadialGlowCenter = Color(0x2600D4AA)       // #00d4aa 15% → transparent
+val SpaceBgCenter = Color(0xFF021418)          // Outer background image-matched #021418
+val SpaceBgMid = Color(0xFF0C252C)
+val SpaceBgEdge = Color(0xFF071A1E)
+val AmbientGlow = Color(0x2614B8A6)            // rgba(20,184,166,0.15) image glow
+val RadialGlowCenter = Color(0x2614B8A6)       // #14B8A6 15% → transparent
 val GlassWhite004 = Color(0x0AFFFFFF)          // rgba(255,255,255,0.04)
 val GlassBorder008 = Color(0x14FFFFFF)         // rgba(255,255,255,0.08)
 val GlassBorder010 = Color(0x1AFFFFFF)         // rgba(255,255,255,0.10)
-val FocusCardBg = Color(0xD90D2A30)            // #0d2a30 @85% (D9)
-val FocusCardStroke = Color(0xFF1A4A52)        // 1dp stroke
-val FocusInputBg = Color(0xFF0F2D35)           // input / icon circle bg
-val FocusInputBorder = Color(0xFF1E4A54)       // input / icon circle border
+val FocusCardBg = Color(0xD911272D)            // #11272D @85% image card
+val FocusCardStroke = Color(0xFF1E3D44)        // 1dp stroke image-matched
+val FocusInputBg = Color(0xFF112A30)           // input / icon circle bg image
+val FocusInputBorder = Color(0xFF1E3D44)       // input / icon circle border
 val GlassInput005 = Color(0x0DFFFFFF)
 val GlassInputBorder = Color(0x1AFFFFFF)
 val PlaceholderWhite = Color(0xFF7A9AAA)       // hint / icon inactive
 val IconWhite04 = Color(0x66FFFFFF)            // rgba(255,255,255,0.40)
-val CyanAccent = Color(0xFF00BFA5)            // cyan accent #00BFA5 (current app shade)
-val CyanGlow = Color(0xFF00FFCC)              // cyan glow #00ffcc
-val DividerWhite015 = Color(0xFF1A4A52)        // divider #1a4a52
+val CyanAccent = Color(0xFF14B8A6)            // image accent #14B8A6
+val CyanGlow = Color(0xFF2DD4BF)              // cyan glow image-matched
+val DividerWhite015 = Color(0xFF1E3D44)        // divider image-matched
 val SubtitleWhite = Color(0xFF7A9AAA)         // secondary text #7a9aaa
 val LogoBg007 = Color(0x12FFFFFF)              // rgba(255,255,255,0.07)
-val GradientTealA = Color(0xFF00BFA5)
-val GradientTealB = Color(0xFF00BFA5)
-val CtaGradientA = Color(0xFF00BFA5)          // button solid #00BFA5
-val CtaGradientB = Color(0xFF00BFA5)          // button solid #00BFA5
-val FocusGlowTeal = Color(0x2600BFA5)         // focus glow 15% #00BFA5
-val FocusBorderTeal = Color(0xFF00BFA5)       // focused stroke
+val GradientTealA = Color(0xFF14B8A6)
+val GradientTealB = Color(0xFF0F766E)
+val CtaGradientA = Color(0xFF14B8A6)          // button solid image shade
+val CtaGradientB = Color(0xFF0F766E)          // button gradient end
+val FocusGlowTeal = Color(0x2614B8A6)         // focus glow 15% #14B8A6
+val FocusBorderTeal = Color(0xFF14B8A6)       // focused stroke
 val ValidationError = Color(0xFFFF6B6B)        // soft red
-val AppLogoBgTop = Color(0xFF08181A)
-val AppLogoBgBot = Color(0xFF020C0E)
-val AppLogoTeal = Color(0xFF37E6DA)
+val AppLogoBgTop = Color(0xFF082022)
+val AppLogoBgBot = Color(0xFF021010)
+val AppLogoTeal = Color(0xFF14B8A6)

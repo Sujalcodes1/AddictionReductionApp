@@ -63,7 +63,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 "Block ",
                 "Distractions",
                 "Select distracting apps, set custom daily limits, and auto-block impulse usage during work hours.",
-                Color(0xFF00E676),
+                CyanAccent,
                 "02"
             ),
             OnboardingPage(
@@ -71,7 +71,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 "Deep Focus ",
                 "Timer",
                 "Lock your session with ambient sounds and Pomodoro rhythms to keep your productivity flowing.",
-                Color(0xFF00B0FF),
+                CyanAccent,
                 "03"
             ),
             OnboardingPage(
@@ -79,7 +79,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 "Earn ",
                 "Rewards",
                 "Build daily focus streaks, level up your shield, and track real-time habit analytics.",
-                Color(0xFFFFAB00),
+                CyanAccent,
                 "04"
             )
         )
