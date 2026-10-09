@@ -1,12 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Dark Emerald / Mint Teal — Exact Home Screen spec (#070B0E + #00D09E) -->
-    <color name="bg_outer">#070B0E</color>
-    <color name="bg_glow">#0A0F14</color>
-    <color name="bg_card">#111C24</color>
-    <color name="border_card">#1A2B36</color>
-    <color name="bg_input">#172A33</color>
-    <color name="border_input">#1A2B36</color>
+    <!-- Black + Teal — app-wide spec (#05070B + #00D09E) -->
+    <color name="bg_outer">#05070B</color>
+    <color name="bg_glow">#090D14</color>
+    <color name="bg_card">#10161E</color>
+    <color name="border_card">#1E2936</color>
+    <color name="bg_input">#16202C</color>
+    <color name="border_input">#1E2936</color>
     <color name="border_input_focus">#00D09E</color>
     <color name="cyan_accent">#00D09E</color>
     <color name="cyan_bright">#00D09E</color>
@@ -14,15 +14,15 @@
     <color name="btn_start">#00D09E</color>
     <color name="btn_end">#00D09E</color>
     <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#569A93</color>
-    <color name="text_hint">#569A93</color>
+    <color name="text_secondary">#8A9BB0</color>
+    <color name="text_hint">#7C8DA6</color>
     <color name="icon_active">#00D09E</color>
-    <color name="icon_inactive">#8E99A4</color>
-    <color name="divider">#1A2B36</color>
-    <color name="badge_bg">#111C24</color>
+    <color name="icon_inactive">#8A9BB0</color>
+    <color name="divider">#1E2936</color>
+    <color name="badge_bg">#10161E</color>
     <color name="badge_glow">#00D09E</color>
-    <color name="status_bar">#070B0E</color>
-    <color name="progress_track">#182833</color>
+    <color name="status_bar">#05070B</color>
+    <color name="progress_track">#1A2431</color>
     <!-- legacy keep for Compose compat -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
@@ -32,18 +32,18 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <!-- Exact Onboarding UI — unified to Dark Emerald -->
-    <color name="ob_bg">#070B0E</color>
-    <color name="ob_icon_circle_bg">#172A33</color>
+    <!-- Onboarding UI — unified to Black + Blue -->
+    <color name="ob_bg">#05070B</color>
+    <color name="ob_icon_circle_bg">#16202C</color>
     <color name="ob_accent">#00D09E</color>
     <color name="ob_title_white">#ffffff</color>
-    <color name="ob_body_text">#569A93</color>
+    <color name="ob_body_text">#8A9BB0</color>
     <color name="ob_number_text">#00D09E</color>
     <color name="ob_dot_active">#00D09E</color>
-    <color name="ob_dot_inactive">#1A2B36</color>
-    <color name="ob_skip_text">#569A93</color>
-    <color name="ob_back_text">#569A93</color>
+    <color name="ob_dot_inactive">#1E2936</color>
+    <color name="ob_skip_text">#8A9BB0</color>
+    <color name="ob_back_text">#8A9BB0</color>
     <color name="ob_btn_bg">#00D09E</color>
-    <color name="ob_btn_text">#070B0E</color>
+    <color name="ob_btn_text">#05070B</color>
     <color name="ob_number_line">#00D09E</color>
 </resources>
