@@ -78,18 +78,9 @@ fun PermissionScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    // Fallback light poll every 2s only while resumed, stops when all granted
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(2000)
-            if (!lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) continue
-            hasUsageAccess = PermissionUtils.hasUsageAccess(context)
-            hasOverlay = PermissionUtils.hasOverlayPermission(context)
-            hasAccessibility = PermissionUtils.hasAccessibilityPermission(context)
-            hasNotificationPermission = PermissionUtils.hasNotificationPermission(context)
-            if (hasUsageAccess && hasOverlay && hasAccessibility && hasNotificationPermission) break
-        }
-    }
+    // LAG FIX: removed while(true) 2s poll — it forced a full recompose every 2s
+    // (Binder IPC x4 per tick). ON_RESUME observer above is sufficient; user
+    // returns from Settings -> ON_RESUME refreshes. No background polling.
 
     val permissions = remember {
         listOf(

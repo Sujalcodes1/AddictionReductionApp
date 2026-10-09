@@ -132,9 +132,12 @@ fun AnimatedCircularProgress(
     trackColor: Color = ProgressTrack,
     content: @Composable () -> Unit = {}
 ) {
+    // LAG FIX: was tween(1000) — progress ticks every 1s, so a 1s animation meant
+    // the arc was animating 100% of the time (constant Canvas redraw + jank).
+    // 300ms settles between ticks.
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 1000, easing = EaseOutCubic),
+        animationSpec = tween(durationMillis = 300, easing = LinearEasing),
         label = "progress"
     )
 

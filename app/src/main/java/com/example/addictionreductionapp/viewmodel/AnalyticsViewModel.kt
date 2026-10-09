@@ -66,11 +66,13 @@ class AnalyticsViewModel @Inject constructor(
                     lastObservedDate = currentDate
                     bindDateAnalytics(currentDate)
                 }
-                // Throttled background sync — 60s instead of 30s to reduce CPU
+                // LAG FIX: 60s -> 5min. Each sync scans 1 day of UsageEvents +
+                // PackageManager labels + Room upserts, then 8 collectors each
+                // trigger a full dashboard recompose. Throttle aggressively.
                 try {
                     appUsageRepository.syncUsageFromSystem(daysToSync = 1)
                 } catch (_: Exception) { }
-                delay(60_000L)
+                delay(300_000L)
             }
         }
     }

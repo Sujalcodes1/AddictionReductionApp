@@ -172,9 +172,12 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 state = pagerState,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                // LAG FIX: preload only adjacent page — default preloads all,
+                // each running its own infiniteTransition pulse.
+                beyondViewportPageCount = 1
             ) { page ->
-                OnboardingPageContent(pages[page])
+                OnboardingPageContent(pages[page], isVisible = (page == pagerState.currentPage))
             }
 
             Spacer(Modifier.height(16.dp))
@@ -194,12 +197,11 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 ) {
                     repeat(4) { index ->
                         val isSelected = pagerState.currentPage == index
+                        // LAG FIX: was spring(Bouncy, Low stiffness) — long overshoot
+                        // re-layouts 4 indicators for ~1s per swipe. Snappy tween.
                         val width by animateDpAsState(
                             targetValue = if (isSelected) 32.dp else 8.dp,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessLow
-                            ),
+                            animationSpec = tween(250),
                             label = "indicatorWidth"
                         )
                         Box(
@@ -300,11 +302,13 @@ fun OnboardingScreen(onComplete: () -> Unit) {
 }
 
 @Composable
-private fun OnboardingPageContent(page: OnboardingPage) {
+private fun OnboardingPageContent(page: OnboardingPage, isVisible: Boolean) {
+    // LAG FIX: 4 pages x 2 infinite animations = 8 perpetual recompositions even
+    // off-screen. Freeze pulse when page isn't visible.
     val infiniteTransition = rememberInfiniteTransition(label = "glowPulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.95f,
-        targetValue = 1.05f,
+        targetValue = if (isVisible) 1.05f else 0.95f,
         animationSpec = infiniteRepeatable(
             animation = tween(2200, easing = EaseInOutSine),
             repeatMode = RepeatMode.Reverse
@@ -313,7 +317,7 @@ private fun OnboardingPageContent(page: OnboardingPage) {
     )
     val glowAlpha by infiniteTransition.animateFloat(
         initialValue = 0.25f,
-        targetValue = 0.65f,
+        targetValue = if (isVisible) 0.65f else 0.25f,
         animationSpec = infiniteRepeatable(
             animation = tween(2200, easing = EaseInOutSine),
             repeatMode = RepeatMode.Reverse

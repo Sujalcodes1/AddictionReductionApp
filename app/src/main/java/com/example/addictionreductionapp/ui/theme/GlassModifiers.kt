@@ -19,6 +19,10 @@ import androidx.compose.ui.unit.dp
 /**
  * Glass glow shadow — shared modifier for Login/Register/Permission cards.
  * Draws outer glow outside bounds while clipping inner area (prevents black shadow bug).
+ *
+ * LAG FIX: setShadowLayer forces a SOFTWARE layer + offscreen bitmap per card.
+ * Capped radius to 8dp and alpha to 0.2 so overdraw stays cheap. Callers should
+ * avoid stacking this with .shadow() on the same card.
  */
 fun Modifier.glassGlow(
     color: Color,
@@ -28,8 +32,8 @@ fun Modifier.glassGlow(
     offsetY: Dp = 0.dp
 ): Modifier = this.then(
     if (glowAlpha < 0.01f) Modifier else Modifier.drawWithCache {
-        val glowColor = color.copy(alpha = glowAlpha.coerceIn(0f, 0.35f))
-        val glowPx = glowRadius.toPx().coerceAtMost(12.dp.toPx())
+        val glowColor = color.copy(alpha = glowAlpha.coerceIn(0f, 0.2f))
+        val glowPx = glowRadius.toPx().coerceAtMost(8.dp.toPx())
         val borderPx = borderRadius.toPx()
         val offsetYPx = offsetY.toPx()
         val innerPath = Path().apply {

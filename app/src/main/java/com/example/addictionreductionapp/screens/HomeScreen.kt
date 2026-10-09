@@ -109,13 +109,35 @@ fun HomeScreen(
             .background(DarkBackground)
             .background(homeRadial)
     ) {
-        val hasUsage = PermissionUtils.hasUsageAccess(context)
-        val hasOverlay = PermissionUtils.hasOverlayPermission(context)
-        val hasAccessibility = PermissionUtils.hasAccessibilityPermission(context)
-        val batteryOptWhitelisted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            pm.isIgnoringBatteryOptimizations(context.packageName)
-        } else true
+        // LAG FIX: PermissionUtils.* + PowerManager Binder IPC ran on EVERY recompose
+        // (every 15s poll + every state change). Cache in remember, refresh on ON_RESUME.
+        var hasUsage by remember { mutableStateOf(PermissionUtils.hasUsageAccess(context)) }
+        var hasOverlay by remember { mutableStateOf(PermissionUtils.hasOverlayPermission(context)) }
+        var hasAccessibility by remember { mutableStateOf(PermissionUtils.hasAccessibilityPermission(context)) }
+        var batteryOptWhitelisted by remember {
+            mutableStateOf(
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                    pm.isIgnoringBatteryOptimizations(context.packageName)
+                } else true
+            )
+        }
+        val homeLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        DisposableEffect(homeLifecycle) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    hasUsage = PermissionUtils.hasUsageAccess(context)
+                    hasOverlay = PermissionUtils.hasOverlayPermission(context)
+                    hasAccessibility = PermissionUtils.hasAccessibilityPermission(context)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                        batteryOptWhitelisted = pm.isIgnoringBatteryOptimizations(context.packageName)
+                    }
+                }
+            }
+            homeLifecycle.lifecycle.addObserver(observer)
+            onDispose { homeLifecycle.lifecycle.removeObserver(observer) }
+        }
 
         // Virtualized LazyColumn — only visible items composed, smooth scroll
         LazyColumn(
@@ -586,7 +608,9 @@ fun HomeScreen(
             }
         }
     }
-    SideEffect {
+    // LAG FIX: SideEffect{} ran + logged on EVERY recompose (Binder log spam).
+    // Log once on first composition instead.
+    LaunchedEffect(Unit) {
         val duration = android.os.SystemClock.elapsedRealtime() - startCompose
         android.util.Log.d("PerfDebug", "HomeScreen composed in $duration ms")
     }

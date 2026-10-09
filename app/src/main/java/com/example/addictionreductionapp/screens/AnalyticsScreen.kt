@@ -55,7 +55,6 @@ fun AnalyticsScreen(
     analyticsViewModel: AnalyticsViewModel = hiltViewModel(),
     dashboardViewModel: DashboardViewModel = hiltViewModel()
 ) {
-    val startCompose = android.os.SystemClock.elapsedRealtime()
     val analyticsState by analyticsViewModel.uiState.collectAsStateWithLifecycle()
     val dashboardState by dashboardViewModel.uiState.collectAsStateWithLifecycle()
     // Phase 7.5: observe the AddictionProfile StateFlow with lifecycle awareness.
@@ -93,10 +92,8 @@ fun AnalyticsScreen(
             }
         }
     }
-    androidx.compose.runtime.SideEffect {
-        val duration = android.os.SystemClock.elapsedRealtime() - startCompose
-        android.util.Log.d("PerfDebug", "AnalyticsScreen composed in $duration ms")
-    }
+    // LAG FIX: SideEffect{} + elapsedRealtime logged on EVERY recompose
+    // (dashboard recomposes up to 8x per data tick). Removed — use profiler.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

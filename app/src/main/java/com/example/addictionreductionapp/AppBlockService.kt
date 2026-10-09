@@ -68,8 +68,12 @@ class AppBlockService : AccessibilityService() {
     companion object {
         private const val TAG = "AppBlockService"
         private const val BLOCK_COOLDOWN_MS = 5_000L
-        private const val POLL_INTERVAL_MS = 10_000L
+        // LAG FIX: 10s -> 30s. Polling wakes CPU + hits Room every 10s even when idle.
+        private const val POLL_INTERVAL_MS = 30_000L
         private const val MIN_SESSION_DURATION_MS = 3_000L
+        // LAG FIX: debounce rapid window-change bursts (e.g. animation frames firing
+        // multiple TYPE_WINDOW_STATE_CHANGED in <1s for the same package).
+        private const val EVENT_DEBOUNCE_MS = 1_500L
         private const val NOTIFICATION_ID = 2002
         private const val CHANNEL_ID = "accessibility_service"
         private val DATE_FMT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -81,6 +85,9 @@ class AppBlockService : AccessibilityService() {
     private var lastBlockedPackage: String? = null
     private var lastBlockedTime: Long = 0L
     private var sessionStartWallMs: Long = 0L
+    // LAG FIX: debounce state for accessibility events (accessed on main thread only)
+    private var lastEventPackage: String? = null
+    private var lastEventTimeMs: Long = 0L
 
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -198,32 +205,42 @@ class AppBlockService : AccessibilityService() {
             return
         }
 
-        // Confirm foreground package with USM to avoid overlays
-        val confirmedPkg = confirmForegroundPackage(pkg) ?: return
+        // LAG FIX: debounce — confirmForegroundPackage() does USM queryEvents IPC.
+        // Previously ran synchronously on the MAIN thread for every window change.
+        // Now: drop duplicates within debounce window, and move confirm off-main.
+        val nowElapsed = SystemClock.elapsedRealtime()
+        if (pkg == lastEventPackage && nowElapsed - lastEventTimeMs < EVENT_DEBOUNCE_MS) {
+            return
+        }
+        lastEventPackage = pkg
+        lastEventTimeMs = nowElapsed
 
-        if (confirmedPkg != lastActivePackage) {
-            Log.d(TAG, "Foreground changed: $confirmedPkg (Accessibility event: $pkg)")
+        serviceScope.launch {
+            val confirmedPkg = confirmForegroundPackage(pkg) ?: return@launch
+            withContext(Dispatchers.Main) {
+                if (confirmedPkg != lastActivePackage) {
+                    // Flush the previous app's session
+                    lastActivePackage?.let { prevPkg ->
+                        val durationMs = SystemClock.elapsedRealtime() - activePackageStartElapsed
+                        if (durationMs >= MIN_SESSION_DURATION_MS) {
+                            persistSessionAsync(
+                                packageName = prevPkg,
+                                sessionStartWall = sessionStartWallMs,
+                                sessionEndWall = System.currentTimeMillis(),
+                                durationMs = durationMs
+                            )
+                        }
+                    }
 
-            // Flush the previous app's session
-            lastActivePackage?.let { prevPkg ->
-                val durationMs = SystemClock.elapsedRealtime() - activePackageStartElapsed
-                if (durationMs >= MIN_SESSION_DURATION_MS) {
-                    persistSessionAsync(
-                        packageName = prevPkg,
-                        sessionStartWall = sessionStartWallMs,
-                        sessionEndWall = System.currentTimeMillis(),
-                        durationMs = durationMs
-                    )
+                    lastActivePackage = confirmedPkg
+                    activePackageStartElapsed = SystemClock.elapsedRealtime()
+                    sessionStartWallMs = System.currentTimeMillis()
                 }
             }
 
-            lastActivePackage = confirmedPkg
-            activePackageStartElapsed = SystemClock.elapsedRealtime()
-            sessionStartWallMs = System.currentTimeMillis()
+            // Immediate check on foreground change (don't wait for poll)
+            checkCurrentAppUsage()
         }
-
-        // Immediate check on foreground change (don't wait for poll)
-        checkCurrentAppUsage()
     }
 
     // ── Core blocking logic ───────────────────────────────────────────────────

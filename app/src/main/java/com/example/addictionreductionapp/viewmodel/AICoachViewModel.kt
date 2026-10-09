@@ -55,6 +55,12 @@ class AICoachViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AICoachUiState())
     val uiState: StateFlow<AICoachUiState> = _uiState.asStateFlow()
 
+    // LAG FIX: separate input flow so per-keystroke typing recomposes ONLY the
+    // TextField (collected inside ChatInputRow), not the whole LazyColumn screen.
+    // _uiState.currentInput is now only cleared on send, never updated per keystroke.
+    private val _input = MutableStateFlow("")
+    val currentInput: StateFlow<String> = _input.asStateFlow()
+
     // ── AI Coach Intelligence Engine ─────────────────────────────────────────
     // Ranked list of CoachInsight objects derived from historical trends,
     // behavior patterns, and relapse predictions.
@@ -115,10 +121,11 @@ class AICoachViewModel @Inject constructor(
     }
 
     fun updateInput(input: String) {
-        _uiState.update { it.copy(currentInput = input) }
+        // LAG FIX: only update the isolated input flow — NOT _uiState.
+        _input.value = input
     }
 
-    fun sendMessage(text: String = _uiState.value.currentInput) {
+    fun sendMessage(text: String = _input.value) {
         if (text.isBlank()) return
         val trimmed = text.trim()
 
@@ -140,6 +147,7 @@ class AICoachViewModel @Inject constructor(
                 rateLimitReached = reached
             )
         }
+        _input.value = ""
 
         viewModelScope.launch {
             chatMessageRepository.insert(ChatMessageEntity(sender = "user", text = trimmed))
@@ -202,6 +210,7 @@ class AICoachViewModel @Inject constructor(
                 "Like the legendary archer who mastered discipline, I'm here to help you build better habits. " +
                 "How can I help you today?"
             )
+            _input.value = ""
             _uiState.update { 
                 it.copy(
                     messages = listOf(welcomeMessage),

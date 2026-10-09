@@ -98,7 +98,9 @@ class HomeViewModel @Inject constructor(
             flow {
                 while (isActive) {
                     emit(Unit)
-                    delay(15_000L)
+                    // LAG FIX: 15s -> 60s. Each tick hits UsageStatsManager + Room and
+                    // recomposes the entire Home LazyColumn. 60s is plenty for a dashboard.
+                    delay(60_000L)
                 }
             }
             .flowOn(Dispatchers.IO)
@@ -131,13 +133,24 @@ class HomeViewModel @Inject constructor(
                 val blockedCount = result.second.first
                 val totalLimitMins = result.second.second
                 val hasSelected = result.third
-                _uiState.update {
-                    it.copy(
-                        totalUsedMillis = total,
-                        appsBlockedToday = blockedCount,
-                        totalLimitMins = totalLimitMins.coerceAtLeast(1L),
-                        hasSelectedApps = hasSelected
-                    )
+                // LAG FIX: skip redundant emits — previously every tick forced a full
+                // recompose even when nothing changed.
+                _uiState.update { current ->
+                    val newLimit = totalLimitMins.coerceAtLeast(1L)
+                    if (current.totalUsedMillis == total &&
+                        current.appsBlockedToday == blockedCount &&
+                        current.totalLimitMins == newLimit &&
+                        current.hasSelectedApps == hasSelected
+                    ) {
+                        current
+                    } else {
+                        current.copy(
+                            totalUsedMillis = total,
+                            appsBlockedToday = blockedCount,
+                            totalLimitMins = newLimit,
+                            hasSelectedApps = hasSelected
+                        )
+                    }
                 }
             }
         }

@@ -29,6 +29,7 @@ class AppUsageRepository @Inject constructor(
     companion object {
         private const val TAG = "AppUsageRepository"
         private val DATE_FMT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        private const val MIN_SYNC_GAP_MS = 120_000L
     }
 
     /**
@@ -38,6 +39,11 @@ class AppUsageRepository @Inject constructor(
      */
     @Volatile private var lastOsSyncTimeMs: Long = 0L
     @Volatile private var lastOsSyncDate: String = ""
+    // LAG FIX: throttle + label cache. syncUsageFromSystem was called from
+    // MainActivity startup + AnalyticsViewModel every 60s + DailySnapshotWorker,
+    // each doing a full UsageEvents scan + PackageManager IPC per app per day.
+    @Volatile private var lastFullSyncMs: Long = 0L
+    private val labelCache = mutableMapOf<String, Pair<String, ApplicationInfo?>>()
 
     fun getTopUsedAppsToday(today: String, limit: Int = 5): Flow<List<AppUsageEntity>> =
         appUsageDao.getTopUsedAppsToday(today, limit)
@@ -122,6 +128,16 @@ class AppUsageRepository @Inject constructor(
             return@withContext
         }
 
+        // LAG FIX: coalesce rapid repeat syncs (watcher + startup + workers firing
+        // within seconds of each other). Full 7-day syncs bypass the throttle only
+        // if the last one is older than MIN_SYNC_GAP_MS.
+        val nowMs = System.currentTimeMillis()
+        if (nowMs - lastFullSyncMs < MIN_SYNC_GAP_MS) {
+            Log.d(TAG, "syncUsageFromSystem throttled (last sync ${nowMs - lastFullSyncMs}ms ago)")
+            return@withContext
+        }
+        lastFullSyncMs = nowMs
+
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return@withContext
         val pm = context.packageManager
 
@@ -203,11 +219,22 @@ class AppUsageRepository @Inject constructor(
                 if (minutes <= 0 && opens <= 0) continue
 
                 var appInfo: ApplicationInfo? = null
-                val appName = try {
-                    appInfo = pm.getApplicationInfo(packageName, 0)
-                    pm.getApplicationLabel(appInfo).toString()
-                } catch (e: Exception) {
-                    getAppNameForPackage(packageName)
+                // LAG FIX: cache PackageManager label lookups (Binder IPC ~ms each,
+                // repeated per app per day x7 days on every sync).
+                val cached = labelCache[packageName]
+                val appName: String
+                if (cached != null) {
+                    appName = cached.first
+                    appInfo = cached.second
+                } else {
+                    val resolvedName = try {
+                        appInfo = pm.getApplicationInfo(packageName, 0)
+                        pm.getApplicationLabel(appInfo).toString()
+                    } catch (e: Exception) {
+                        getAppNameForPackage(packageName)
+                    }
+                    appName = resolvedName
+                    if (labelCache.size < 500) labelCache[packageName] = appName to appInfo
                 }
 
                 val category = AppCategoryResolver.resolveCategory(packageName, appInfo)

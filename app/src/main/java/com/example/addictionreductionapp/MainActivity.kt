@@ -215,7 +215,9 @@ class MainActivity : ComponentActivity() {
             }
 
             // Deferred heavy work: run after first frame, low priority, with yield
-            kotlinx.coroutines.delay(1200)
+            // LAG FIX: 1200ms -> 2500ms so first frame + NavHost settle before
+            // UsageStats scan + snapshot rebuild contend for IO/CPU.
+            kotlinx.coroutines.delay(2500)
             try {
                 appUsageRepository.syncUsageFromSystem(daysToSync = 3)
             } catch (e: Exception) {
@@ -669,12 +671,11 @@ fun BottomNavItem(
     onNavigate: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    // LAG FIX: was spring(MediumBouncy, Medium) — bouncy overshoot re-triggers
+    // layout + AnimatedVisibility expand/shrink on every tab switch. Cheap tween.
     val chipWidth by animateDpAsState(
         targetValue = if (isSelected) 100.dp else 44.dp,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = tween(200),
         label = route
     )
     Box(
@@ -703,10 +704,12 @@ fun BottomNavItem(
                 tint = if (isSelected) CyanAccent else SubtitleWhite,
                 modifier = Modifier.size(20.dp)
             )
+            // LAG FIX: fade only — expand/shrinkHorizontally forces remeasure
+            // of the whole bottom bar every frame of the animation.
             AnimatedVisibility(
                 visible = isSelected,
-                enter = fadeIn(tween(200)) + expandHorizontally(tween(250)),
-                exit = fadeOut(tween(150)) + shrinkHorizontally(tween(200))
+                enter = fadeIn(tween(150)),
+                exit = fadeOut(tween(150))
             ) {
                 Row {
                     Spacer(Modifier.width(5.dp))

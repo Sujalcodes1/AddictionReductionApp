@@ -43,8 +43,6 @@ import kotlinx.coroutines.launch
 fun AICoachScreen(
     viewModel: AICoachViewModel = hiltViewModel()
 ) {
-    val startCompose = android.os.SystemClock.elapsedRealtime()
-    
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val coachInsights by viewModel.coachInsights.collectAsStateWithLifecycle()
 
@@ -54,27 +52,21 @@ fun AICoachScreen(
     
     val listState = rememberLazyListState()
 
-    val quickReplies = listOf(
-        "I'm struggling", "Give me a tip", "What's my progress?", "I relapsed", "Motivate me"
-    )
-
-    // ── Lifecycle probe: fires every time this composable enters/leaves composition
-    DisposableEffect(Unit) {
-        android.util.Log.d("NavDebug", "AICoachScreen ENTERED composition (messages=${uiState.messages.size})")
-        onDispose {
-            android.util.Log.d("NavDebug", "AICoachScreen LEFT composition — messages state preserved in ViewModel")
-        }
+    val quickReplies = remember {
+        listOf(
+            "I'm struggling", "Give me a tip", "What's my progress?", "I relapsed", "Motivate me"
+        )
     }
 
-    // ── Recomposition probe
-    SideEffect {
-        android.util.Log.d("NavDebug", "AICoachScreen RECOMPOSED (messages.size=${uiState.messages.size})")
-    }
-
+    // LAG FIX: removed DisposableEffect + SideEffect log probes (fired every recompose).
+    // LAG FIX: animateScrollToItem on every typing toggle caused fling-cancel jank.
+    // Use non-animated scrollToItem, skip while user is scrolling.
     LaunchedEffect(uiState.messages.size, uiState.isTyping) {
         val totalItems = uiState.messages.size + if (uiState.isTyping) 1 else 0
-        if (totalItems > 0) {
-            listState.animateScrollToItem(totalItems - 1)
+        if (totalItems > 0 && !listState.isScrollInProgress) {
+            try {
+                listState.scrollToItem(totalItems - 1)
+            } catch (_: Exception) { }
         }
     }
 
@@ -140,7 +132,8 @@ fun AICoachScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(end = 12.dp)
             ) {
-                items(coachInsights.take(3)) { insight ->
+                // LAG FIX: stable keys prevent full rebind on every emission.
+                items(coachInsights.take(3), key = { it.title }) { insight ->
                     val accent = when (insight.priority) {
                         com.example.addictionreductionapp.data.models.CoachPriority.CRITICAL -> Color(0xFFFF4444)
                         com.example.addictionreductionapp.data.models.CoachPriority.HIGH -> Color(0xFFFF9800)
@@ -177,6 +170,9 @@ fun AICoachScreen(
         }
 
         // ── Messages ──────────────────────────────────────────────
+        // LAG FIX: was items(messages.withIndex().toList(), key=index) — allocated a
+        // new list on EVERY recompose + index keys rebind all rows on insert.
+        // itemsIndexed with stable index keys for append-only list is cheaper.
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -185,7 +181,14 @@ fun AICoachScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 12.dp)
         ) {
-            items(uiState.messages.withIndex().toList(), key = { it.index }) { (index, pair) ->
+            items(
+                count = uiState.messages.size,
+                key = { index ->
+                    val p = uiState.messages.getOrNull(index)
+                    if (p == null) index else (index * 31 + p.first.hashCode() * 17 + p.second.hashCode())
+                }
+            ) { index ->
+                val pair = uiState.messages[index]
                 val sender = pair.first
                 val text = pair.second
                 val isUser = sender == "user"
@@ -273,7 +276,8 @@ fun AICoachScreen(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(quickReplies) { reply ->
+            // LAG FIX: stable keys
+            items(quickReplies, key = { it }) { reply ->
                 OutlinedButton(
                     onClick = { viewModel.sendMessage(reply) },
                     shape = RoundedCornerShape(20.dp),
@@ -285,50 +289,15 @@ fun AICoachScreen(
             }
         }
 
-        // ── Input Row ─────────────────────────────────────────────
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = uiState.currentInput,
-                onValueChange = { viewModel.updateInput(it) },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask Arjuna...", color = TextGray) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = CyanAccent,
-                    unfocusedBorderColor = DarkCardLight,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    cursorColor = CyanAccent
-                ),
-                shape = RoundedCornerShape(24.dp),
-                maxLines = 3
-            )
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = { viewModel.sendMessage() },
-                modifier = Modifier
-                    .size(48.dp)
-                    .shadow(
-                        elevation = 8.dp,
-                        shape = CircleShape,
-                        clip = false,
-                        ambientColor = CyanAccent.copy(alpha = 0.5f),
-                        spotColor = CyanAccent.copy(alpha = 0.5f)
-                    )
-                    .background(CyanAccent, CircleShape)
-            ) {
-                Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.Black)
-            }
-        }
+        // ── Input Row (isolated — typing recomposes ONLY this, not the message list)
+        ChatInputRow(viewModel = viewModel)
     }
 
     // ── Report AI Response Dialog ────────────────────────────────────────
     if (showReportDialog) {
-        val reportOptions = listOf("Offensive or inappropriate", "Harmful advice", "Inaccurate or misleading", "Spam or irrelevant", "Other")
+        val reportOptions = remember {
+            listOf("Offensive or inappropriate", "Harmful advice", "Inaccurate or misleading", "Spam or irrelevant", "Other")
+        }
         AlertDialog(
             onDismissRequest = { showReportDialog = false; reportReason = "" },
             containerColor = DarkCard,
@@ -383,9 +352,45 @@ fun AICoachScreen(
             }
         )
     }
+}
 
-    SideEffect {
-        val duration = android.os.SystemClock.elapsedRealtime() - startCompose
-        android.util.Log.d("PerfDebug", "AICoachScreen composed in $duration ms")
+// LAG FIX: isolated input — collects currentInput here so keystrokes don't
+// recompose the message LazyColumn / insight cards above.
+@Composable
+private fun ChatInputRow(
+    viewModel: AICoachViewModel = hiltViewModel()
+) {
+    val input by viewModel.currentInput.collectAsStateWithLifecycle()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = input,
+            onValueChange = { viewModel.updateInput(it) },
+            modifier = Modifier.weight(1f),
+            placeholder = { Text("Ask Arjuna...", color = TextGray) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = CyanAccent,
+                unfocusedBorderColor = DarkCardLight,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                cursorColor = CyanAccent
+            ),
+            shape = RoundedCornerShape(24.dp),
+            maxLines = 3,
+            singleLine = false
+        )
+        Spacer(Modifier.width(8.dp))
+        IconButton(
+            onClick = { viewModel.sendMessage() },
+            modifier = Modifier
+                .size(48.dp)
+                .background(CyanAccent, CircleShape)
+        ) {
+            Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.Black)
+        }
     }
 }
